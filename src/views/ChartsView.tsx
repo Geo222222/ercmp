@@ -1,32 +1,36 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import type { BoardConfig, ChartType, Row } from '../types'
 import { BarChart, BoxChart, CorrChart, HistogramChart, ScatterChart } from '../components/StatCharts'
+import { Hint } from '../components/Hint'
 import {
   barCounts,
   boxplot,
+  categoryLabel,
   correlation,
   histogram,
+  isMissingCategory,
   sampleJobHints,
   scatter,
+  UNASSIGNED_KEY,
   type BarModel,
   type BoxModel,
   type CorrModel,
   type HistModel,
   type ScatterModel,
 } from '../lib/stats'
+import type { HelpKey } from '../lib/helpCopy'
 import { asNumber, asText, categoricalColumns, numericColumns } from '../lib/rows'
-import { dateStamp, displayValue, formatInt } from '../lib/format'
+import { dateStamp, formatInt } from '../lib/format'
 import { downloadSvgAsPng } from '../lib/download'
 import { themePalette } from '../lib/theme'
-import { LabelHint } from '../components/Hint'
 import './ChartsView.css'
 
-const TYPES: { id: ChartType; label: string; signal: string }[] = [
-  { id: 'bar', label: 'Share', signal: 'Arc + density rails' },
-  { id: 'hist', label: 'Density', signal: 'Signal silhouette' },
-  { id: 'box', label: 'Range', signal: 'Tower spread' },
-  { id: 'scatter', label: 'Field', signal: 'Constellation' },
-  { id: 'corr', label: 'Links', signal: 'Pearson matrix' },
+const TYPES: { id: ChartType; label: string; signal: string; tip: HelpKey }[] = [
+  { id: 'bar', label: 'Share', signal: 'Arc + density rails', tip: 'chartsShare' },
+  { id: 'hist', label: 'Density', signal: 'Signal silhouette', tip: 'chartsDensity' },
+  { id: 'box', label: 'Range', signal: 'Tower spread', tip: 'chartsRange' },
+  { id: 'scatter', label: 'Field', signal: 'Constellation', tip: 'chartsField' },
+  { id: 'corr', label: 'Links', signal: 'Pearson matrix', tip: 'chartsLinks' },
 ]
 
 type Props = {
@@ -52,6 +56,7 @@ type FocusState = {
 export function ChartsView({ headers, rows, config, onChange, periodLabel }: Props) {
   const frame = useRef<HTMLDivElement>(null)
   const [selected, setSelected] = useState<string | null>(null)
+  const [excludeMissing, setExcludeMissing] = useState(false)
   const [paletteTick, setPaletteTick] = useState(0)
   const numeric = numericColumns(headers, rows)
   const categorical = categoricalColumns(headers, rows)
@@ -67,7 +72,7 @@ export function ChartsView({ headers, rows, config, onChange, periodLabel }: Pro
 
   useEffect(() => {
     setSelected(null)
-  }, [config.chartType, config.chartCol, config.groupCol, config.scatterX, config.scatterY])
+  }, [config.chartType, config.chartCol, config.groupCol, config.scatterX, config.scatterY, excludeMissing])
 
   const palette = useMemo(() => {
     void paletteTick
@@ -89,6 +94,7 @@ export function ChartsView({ headers, rows, config, onChange, periodLabel }: Pro
     selected,
     onSelect: (key) => setSelected(key || null),
     palette,
+    excludeMissing,
   })
 
   function download() {
@@ -116,18 +122,10 @@ export function ChartsView({ headers, rows, config, onChange, periodLabel }: Pro
           Mode <strong>{activeType.label}</strong> · {activeType.signal}
           {periodLabel ? ` · ${periodLabel}` : ''}
         </span>
+        <Hint tip={activeType.tip} label={`${activeType.label} help`} />
       </div>
 
       <div className="charts-controls">
-        <div className="charts-mode-head">
-          <LabelHint tip="chartsShare" label="About Share mode">
-            Share
-          </LabelHint>
-          <span className="tip-sep">·</span>
-          <LabelHint tip="chartsDensity" label="About Density mode">
-            Density
-          </LabelHint>
-        </div>
         <div className="seg chart-seg" role="group" aria-label="Chart type">
           {TYPES.map((type) => (
             <button
@@ -151,6 +149,17 @@ export function ChartsView({ headers, rows, config, onChange, periodLabel }: Pro
                 </option>
               ))}
             </select>
+          </label>
+        )}
+        {config.chartType === 'bar' && (
+          <label className="charts-toggle">
+            <input
+              type="checkbox"
+              checked={excludeMissing}
+              onChange={(event) => setExcludeMissing(event.target.checked)}
+            />
+            <span>Exclude Unassigned</span>
+            <Hint tip="chartsExcludeMissing" label="Exclude Unassigned help" />
           </label>
         )}
         {config.chartType === 'box' && (
@@ -200,7 +209,9 @@ export function ChartsView({ headers, rows, config, onChange, periodLabel }: Pro
 
       {chart.note && <p className="hint charts-hint-live">{chart.note}</p>}
       {chart.svg && !chart.focus && (
-        <p className="hint charts-hint-live">Tap an arc, rail, node, tower, star, or cell — lock focus for count, share, and sample jobs.</p>
+        <p className="hint charts-hint-live">
+          Tap to lock focus — count, share, and sample jobs appear above the instrument.
+        </p>
       )}
     </section>
   )
@@ -284,10 +295,11 @@ type RenderArgs = {
   selected: string | null
   onSelect: (key: string) => void
   palette: { primary: string; secondary: string; warn: string; bad: string; muted: string }
+  excludeMissing: boolean
 }
 
 function renderChart(args: RenderArgs): { node: ReactNode; svg: boolean; note?: string; focus?: FocusState } {
-  const { rows, headers, config, numeric, selected, onSelect, palette } = args
+  const { rows, headers, config, numeric, selected, onSelect, palette, excludeMissing } = args
 
   if (config.chartType === 'corr') {
     const model = correlation(rows, numeric.length ? numeric : config.analysisCols)
@@ -344,6 +356,7 @@ function renderChart(args: RenderArgs): { node: ReactNode; svg: boolean; note?: 
       svg: true,
       node: <BoxChart model={model} selected={selected} onSelect={onSelect} palette={palette} />,
       focus: boxFocus(model, rows, headers, config, selected),
+      note: 'Range towers — tap a group to lock median, IQR, and sample jobs.',
     }
   }
 
@@ -365,8 +378,8 @@ function renderChart(args: RenderArgs): { node: ReactNode; svg: boolean; note?: 
       node: <ScatterChart model={model} selected={selected} onSelect={onSelect} palette={palette} />,
       focus: scatterFocus(model, rows, headers, selected),
       note: model.hidden
-        ? `Showing a sample. ${formatInt(model.hidden)} points are off this plot; the line uses every pair.`
-        : undefined,
+        ? `Constellation sample — ${formatInt(model.hidden)} points off-plot; fit uses every pair.`
+        : 'Constellation field — tap a star to lock that pair.',
     }
   }
 
@@ -382,17 +395,30 @@ function renderChart(args: RenderArgs): { node: ReactNode; svg: boolean; note?: 
     }
   }
 
-  const model = barCounts(rows, config.chartCol)
+  const model = barCounts(rows, config.chartCol, { excludeMissing })
   if (!model) {
-    return { svg: false, node: <EmptyInstrument title="No values to count" body="That column is empty after filters." /> }
+    return {
+      svg: false,
+      node: (
+        <EmptyInstrument
+          title={excludeMissing ? 'Only Unassigned left' : 'No values to count'}
+          body={
+            excludeMissing
+              ? 'Turn off Exclude Unassigned, or pick another column — every remaining value was blank/null.'
+              : 'That column is empty after filters.'
+          }
+        />
+      ),
+    }
   }
   return {
     svg: true,
     node: <BarChart model={model} selected={selected} onSelect={onSelect} palette={palette} />,
     focus: barFocus(model, rows, headers, selected),
-    note: model.hidden
-      ? `Arc shows top ${Math.min(6, model.items.length)}; rails list top 24 of ${formatInt(model.items.length + model.hidden)} · tap to lock.`
-      : 'Arc share for the leaders · density rails for the full ranking · tap to lock focus.',
+    note:
+      model.missing > 0 && !excludeMissing
+        ? `Unassigned shown as its own rail (${formatInt(model.missing)}). Toggle Exclude Unassigned to hide.`
+        : 'Arc for leaders · density rails below for the full ranking · tap to lock.',
   }
 }
 
@@ -401,11 +427,21 @@ function barFocus(model: BarModel, rows: Row[], headers: string[], selected: str
   const item = model.items.find((entry) => entry.label === selected)
   if (!item) return undefined
   return {
-    title: displayValue(item.label),
+    title: categoryLabel(item.label),
     subtitle: model.column,
     count: item.n,
     share: model.total ? item.n / model.total : null,
-    samples: sampleJobHints(rows, (row) => asText(row[model.column]) === item.label, 4, headers),
+    samples: sampleJobHints(
+      rows,
+      (row) => {
+        const text = asText(row[model.column])
+        if (item.label === UNASSIGNED_KEY) return isMissingCategory(text)
+        return text === item.label
+      },
+      4,
+      headers,
+    ),
+    detail: item.label === UNASSIGNED_KEY ? 'Blank / null / n/a values in this column.' : undefined,
   }
 }
 
@@ -446,7 +482,7 @@ function boxFocus(
   const group = model.groups.find((entry) => entry.name === selected)
   if (!group) return undefined
   return {
-    title: displayValue(group.name),
+    title: categoryLabel(group.name),
     subtitle: model.column,
     count: group.n,
     share: model.total ? group.n / model.total : null,

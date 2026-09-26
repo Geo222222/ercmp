@@ -1,5 +1,6 @@
 import type { KeyboardEvent, ReactNode } from 'react'
 import type { BarModel, BoxModel, CorrModel, HistModel, ScatterModel } from '../lib/stats'
+import { categoryLabel } from '../lib/stats'
 import { ellipsize, formatInt } from '../lib/format'
 
 export type ChartPalette = {
@@ -97,7 +98,7 @@ function GlowDefs({ id }: { id: string }) {
 function InstrumentShell({
   children,
   label,
-  scroll,
+  scroll = true,
 }: {
   children: ReactNode
   label: string
@@ -105,26 +106,21 @@ function InstrumentShell({
 }) {
   return (
     <div className="chart-instrument" data-kind={label}>
-      <div className={scroll === false ? 'chart-scroll' : 'chart-scroll chart-h'}>{children}</div>
+      <div className={scroll ? 'chart-scroll chart-h' : 'chart-scroll chart-static'}>{children}</div>
     </div>
   )
 }
 
 /**
- * Bar mode — NOT a bar dump.
- * Hero: radial arc share for top categories.
- * Body: ranked density rails with lollipop focus locks.
+ * Share mode — arc composition + always-visible ranked density rails.
  */
 export function BarChart({ model, selected, onSelect, palette }: { model: BarModel } & Selectable) {
-  const width = 720
-  const heroH = 236
-  const railTop = heroH + 8
-  const rowH = 44
-  const height = railTop + 16 + model.items.length * rowH
-  const cx = 128
-  const cy = 118
-  const rOuter = 92
-  const rInner = 58
+  const width = 680
+  const heroH = 200
+  const cx = 118
+  const cy = 108
+  const rOuter = 78
+  const rInner = 50
   const total = model.total || 1
   const top = model.items.slice(0, ARC_TOP)
   const topSum = top.reduce((sum, item) => sum + item.n, 0)
@@ -133,7 +129,9 @@ export function BarChart({ model, selected, onSelect, palette }: { model: BarMod
   const remainder = palette?.muted ?? 'var(--faint)'
   const selectedItem = selected ? model.items.find((item) => item.label === selected) : null
   const centerValue = selectedItem ? selectedItem.n : total
-  const centerLabel = selectedItem ? `${((selectedItem.n / total) * 100).toFixed(0)}% share` : model.column
+  const centerLabel = selectedItem
+    ? `${((selectedItem.n / total) * 100).toFixed(0)}% · ${categoryLabel(selectedItem.label)}`
+    : `${model.column} · ${formatInt(model.items.length)} cats`
   const gid = 'share-arc'
 
   const wedges: { key: string; n: number; start: number; end: number; color: string; selectable: boolean }[] = []
@@ -162,164 +160,204 @@ export function BarChart({ model, selected, onSelect, palette }: { model: BarMod
     })
   }
 
-  const railL = 24
-  const railR = width - 24
-  const labelX = 56
-  const trackL = 210
-  const trackR = width - 110
+  const railH = Math.max(36, Math.min(44, 320 / Math.max(model.items.length, 1)))
+  const railsHeight = 28 + model.items.length * railH + 12
+  const trackL = 168
+  const trackR = width - 96
   const trackW = trackR - trackL
 
   return (
-    <InstrumentShell label="share-arc">
-      <svg
-        viewBox={`0 0 ${width} ${height}`}
-        width="100%"
-        height={height}
-        className="stat-svg share-arc-svg"
-        role="img"
-        aria-label={`Share instrument for ${model.column}`}
-      >
-        <GlowDefs id={gid} />
+    <InstrumentShell label="share-arc" scroll={false}>
+      <div className="share-instrument">
+        <div className="share-arc-panel">
+          <svg
+            viewBox={`0 0 ${width} ${heroH}`}
+            width="100%"
+            height={heroH}
+            className="stat-svg"
+            role="img"
+            aria-label={`Share composition for ${model.column}`}
+          >
+            <GlowDefs id={gid} />
+            <text x={16} y={22} className="hud-kicker">
+              SHARE COMPOSITION · TOP {Math.min(ARC_TOP, model.items.length)}
+            </text>
+            <circle cx={cx} cy={cy} r={rOuter + 6} fill="none" stroke="var(--line)" strokeWidth={1} opacity={0.7} />
+            <circle cx={cx} cy={cy} r={rInner - 4} fill="var(--panel-2)" stroke="var(--line)" strokeWidth={1} />
 
-        {/* Hero arc */}
-        <text x={24} y={28} className="hud-kicker">
-          SHARE COMPOSITION · TOP {Math.min(ARC_TOP, model.items.length)}
-        </text>
-        <circle cx={cx} cy={cy} r={rOuter + 8} fill="none" stroke="var(--line)" strokeWidth={1} opacity={0.7} />
-        <circle cx={cx} cy={cy} r={rInner - 6} fill="var(--panel-2)" stroke="var(--line)" strokeWidth={1} />
+            {wedges.map((wedge) => {
+              if (wedge.end - wedge.start < 0.2) return null
+              const isSelected = selected === wedge.key
+              const active = !selected || selected === wedge.key || wedge.key === '__rest__'
+              const path = donutSlice(cx, cy, rInner, rOuter, wedge.start, wedge.end)
+              const shown = wedge.key === '__rest__' ? 'Other' : categoryLabel(wedge.key)
+              return (
+                <path
+                  key={wedge.key}
+                  d={path}
+                  fill={wedge.color}
+                  opacity={active ? (isSelected ? 1 : wedge.key === '__rest__' ? 0.35 : 0.85) : 0.18}
+                  stroke="var(--bg-elevated)"
+                  strokeWidth={1.5}
+                  filter={isSelected ? `url(#${gid}-glow)` : undefined}
+                  className={wedge.selectable ? 'hud-wedge' : undefined}
+                  {...(wedge.selectable ? rowHandlers(wedge.key, selected, onSelect) : {})}
+                >
+                  <title>
+                    {shown}: {wedge.n}
+                  </title>
+                </path>
+              )
+            })}
 
-        {wedges.map((wedge) => {
-          if (wedge.end - wedge.start < 0.2) return null
-          const isSelected = selected === wedge.key
-          const active = !selected || selected === wedge.key || wedge.key === '__rest__'
-          const path = donutSlice(cx, cy, rInner, rOuter, wedge.start, wedge.end)
-          return (
-            <path
-              key={wedge.key}
-              d={path}
-              fill={wedge.color}
-              opacity={active ? (isSelected ? 1 : wedge.key === '__rest__' ? 0.35 : 0.82) : 0.18}
-              stroke="var(--bg-elevated)"
-              strokeWidth={1.5}
-              filter={isSelected ? `url(#${gid}-glow)` : undefined}
-              className={wedge.selectable ? 'hud-wedge' : undefined}
-              {...(wedge.selectable ? rowHandlers(wedge.key, selected, onSelect) : {})}
+            <text x={cx} y={cy - 4} textAnchor="middle" className="hud-mega">
+              {formatInt(centerValue)}
+            </text>
+            <text x={cx} y={cy + 16} textAnchor="middle" className="hud-sub">
+              {ellipsize(centerLabel, 22)}
+            </text>
+
+            {top.map((item, index) => {
+              const x = 230
+              const y = 44 + index * 28
+              const isSelected = selected === item.label
+              const active = !selected || selected === item.label
+              const share = (item.n / total) * 100
+              const shown = categoryLabel(item.label)
+              return (
+                <g
+                  key={`leg-${item.label}`}
+                  opacity={active ? 1 : 0.28}
+                  className="bar-row"
+                  {...rowHandlers(item.label, selected, onSelect)}
+                >
+                  <rect
+                    x={x}
+                    y={y - 12}
+                    width={width - x - 16}
+                    height={26}
+                    rx={6}
+                    className={isSelected ? 'bar-row-focus' : undefined}
+                    fill={isSelected ? undefined : 'transparent'}
+                  />
+                  <circle
+                    cx={x + 10}
+                    cy={y + 1}
+                    r={5}
+                    fill={mixStops(fill, palette?.secondary ?? fill, index / Math.max(top.length - 1, 1))}
+                  />
+                  <text x={x + 24} y={y + 5} className={isSelected ? 'hud-rail-label hot' : 'hud-rail-label'}>
+                    {ellipsize(shown, 18)}
+                  </text>
+                  <text x={width - 88} y={y + 5} textAnchor="end" className="hud-callout">
+                    {formatInt(item.n)}
+                  </text>
+                  <text x={width - 24} y={y + 5} textAnchor="end" className="hud-micro">
+                    {share.toFixed(1)}%
+                  </text>
+                </g>
+              )
+            })}
+            {rest > 0 && (
+              <text x={230} y={44 + top.length * 28 + 6} className="axis-label">
+                +{formatInt(rest)} outside top {top.length} · see rails
+              </text>
+            )}
+            {model.missing > 0 && (
+              <text x={16} y={heroH - 10} className="hud-micro">
+                {formatInt(model.missing)} unassigned in bucket
+              </text>
+            )}
+          </svg>
+        </div>
+
+        <div className="share-rails-panel">
+          <div className="share-rails-head">
+            <p className="hud-kicker-html">Ranked density rails</p>
+            <span className="share-rails-meta">
+              {formatInt(model.items.length)}
+              {model.hidden > 0 ? `+${formatInt(model.hidden)}` : ''} · tap rail to lock
+            </span>
+          </div>
+          <div className="share-rails-scroll chart-h">
+            <svg
+              viewBox={`0 0 ${width} ${railsHeight}`}
+              width="100%"
+              height={railsHeight}
+              className="stat-svg"
+              role="img"
+              aria-label={`Density rails for ${model.column}`}
             >
-              <title>
-                {wedge.key === '__rest__' ? `Other ${wedge.n}` : `${wedge.key}: ${wedge.n}`}
-              </title>
-            </path>
-          )
-        })}
-
-        <text x={cx} y={cy - 6} textAnchor="middle" className="hud-mega">
-          {formatInt(centerValue)}
-        </text>
-        <text x={cx} y={cy + 16} textAnchor="middle" className="hud-sub">
-          {ellipsize(centerLabel, 18)}
-        </text>
-
-        {/* Arc legend chips */}
-        {top.map((item, index) => {
-          const x = 250
-          const y = 48 + index * 26
-          const isSelected = selected === item.label
-          const active = !selected || selected === item.label
-          const share = (item.n / total) * 100
-          return (
-            <g
-              key={`leg-${item.label}`}
-              opacity={active ? 1 : 0.25}
-              className="bar-row"
-              {...rowHandlers(item.label, selected, onSelect)}
-            >
-              <rect
-                x={x}
-                y={y - 12}
-                width={width - x - 24}
-                height={24}
-                rx={6}
-                className={isSelected ? 'bar-row-focus' : undefined}
-                fill={isSelected ? undefined : 'transparent'}
-              />
-              <circle cx={x + 10} cy={y} r={5} fill={mixStops(fill, palette?.secondary ?? fill, index / Math.max(top.length - 1, 1))} />
-              <text x={x + 24} y={y + 4} className={isSelected ? 'axis-label hot' : 'axis-label'}>
-                {ellipsize(item.label, 22)}
-              </text>
-              <text x={width - 36} y={y + 4} textAnchor="end" className="hud-callout">
-                {share.toFixed(1)}%
-              </text>
-            </g>
-          )
-        })}
-        {rest > 0 && (
-          <text x={250} y={48 + top.length * 26 + 4} className="axis-label">
-            +{formatInt(rest)} in long tail
-          </text>
-        )}
-
-        <line x1={24} x2={width - 24} y1={heroH - 4} y2={heroH - 4} className="grid-line" />
-        <text x={24} y={heroH + 18} className="hud-kicker">
-          RANKED DENSITY RAILS
-        </text>
-
-        {model.items.map((item, index) => {
-          const topY = railTop + 28 + index * rowH
-          const mid = topY + rowH / 2
-          const key = item.label
-          const share = item.n / total
-          const markerX = trackL + share * trackW
-          const isSelected = selected === key
-          const active = !selected || selected === key
-          return (
-            <g
-              key={key}
-              className="bar-row density-rail"
-              opacity={active ? 1 : 0.22}
-              {...rowHandlers(key, selected, onSelect)}
-            >
-              {isSelected && (
-                <rect x={railL - 4} y={topY + 2} width={railR - railL + 8} height={rowH - 4} rx={8} className="bar-row-focus" />
-              )}
-              <text x={labelX - 8} y={mid + 5} textAnchor="end" className="hud-rank">
-                {String(index + 1).padStart(2, '0')}
-              </text>
-              <text x={labelX + 8} y={mid + 5} className={isSelected ? 'hud-rail-label hot' : 'hud-rail-label'}>
-                {ellipsize(item.label, 16)}
-              </text>
-              <line x1={trackL} x2={trackR} y1={mid} y2={mid} stroke="var(--bar-track)" strokeWidth={6} strokeLinecap="round" />
-              <line
-                x1={trackL}
-                x2={markerX}
-                y1={mid}
-                y2={mid}
-                stroke={`url(#${gid}-rail)`}
-                strokeWidth={6}
-                strokeLinecap="round"
-                filter={isSelected ? `url(#${gid}-glow)` : undefined}
-              />
-              <circle
-                cx={markerX}
-                cy={mid}
-                r={isSelected ? 7 : 5}
-                fill="var(--accent)"
-                stroke="var(--bg-elevated)"
-                strokeWidth={2}
-                filter={isSelected ? `url(#${gid}-glow)` : undefined}
-              />
-              <text x={width - 28} y={mid + 5} textAnchor="end" className="hud-callout">
-                {formatInt(item.n)}
-              </text>
-              <text x={width - 28} y={mid + 18} textAnchor="end" className="hud-micro">
-                {(share * 100).toFixed(1)}%
-              </text>
-              <title>
-                {item.label}: {item.n} ({(share * 100).toFixed(1)}%)
-              </title>
-            </g>
-          )
-        })}
-      </svg>
+              <GlowDefs id={`${gid}-rails`} />
+              {model.items.map((item, index) => {
+                const topY = 8 + index * railH
+                const mid = topY + railH / 2
+                const key = item.label
+                const share = item.n / total
+                const markerX = trackL + Math.max(share * trackW, share > 0 ? 4 : 0)
+                const isSelected = selected === key
+                const active = !selected || selected === key
+                const shown = categoryLabel(item.label)
+                return (
+                  <g
+                    key={key}
+                    className="bar-row density-rail"
+                    opacity={active ? 1 : 0.22}
+                    {...rowHandlers(key, selected, onSelect)}
+                  >
+                    {isSelected && (
+                      <rect x={8} y={topY + 2} width={width - 16} height={railH - 4} rx={8} className="bar-row-focus" />
+                    )}
+                    <text x={40} y={mid + 5} textAnchor="end" className="hud-rank">
+                      {String(index + 1).padStart(2, '0')}
+                    </text>
+                    <text x={52} y={mid + 5} className={isSelected ? 'hud-rail-label hot' : 'hud-rail-label'}>
+                      {ellipsize(shown, 14)}
+                    </text>
+                    <line
+                      x1={trackL}
+                      x2={trackR}
+                      y1={mid}
+                      y2={mid}
+                      stroke="var(--bar-track)"
+                      strokeWidth={8}
+                      strokeLinecap="round"
+                    />
+                    <line
+                      x1={trackL}
+                      x2={markerX}
+                      y1={mid}
+                      y2={mid}
+                      stroke={`url(#${gid}-rails-rail)`}
+                      strokeWidth={8}
+                      strokeLinecap="round"
+                      filter={isSelected ? `url(#${gid}-rails-glow)` : undefined}
+                    />
+                    <circle
+                      cx={markerX}
+                      cy={mid}
+                      r={isSelected ? 8 : 6}
+                      fill="var(--accent)"
+                      stroke="var(--bg-elevated)"
+                      strokeWidth={2}
+                      filter={isSelected ? `url(#${gid}-rails-glow)` : undefined}
+                    />
+                    <text x={width - 20} y={mid + 1} textAnchor="end" className="hud-callout">
+                      {formatInt(item.n)}
+                    </text>
+                    <text x={width - 20} y={mid + 14} textAnchor="end" className="hud-micro">
+                      {(share * 100).toFixed(1)}%
+                    </text>
+                    <title>
+                      {shown}: {item.n} ({(share * 100).toFixed(1)}%)
+                    </title>
+                  </g>
+                )
+              })}
+            </svg>
+          </div>
+        </div>
+      </div>
     </InstrumentShell>
   )
 }
@@ -485,7 +523,7 @@ export function BoxChart({ model, selected, onSelect, palette }: { model: BoxMod
                 <circle key={outlierIndex} cx={x} cy={yOf(value)} r={2.75} fill={outlier} opacity={0.9} />
               ))}
               <text x={x} y={height - 48} textAnchor="middle" className={isSelected ? 'hud-rail-label hot' : 'hud-rail-label'}>
-                {ellipsize(group.name, 12)}
+                {ellipsize(categoryLabel(group.name), 12)}
               </text>
               <text x={x} y={height - 30} textAnchor="middle" className="hud-micro">
                 n={formatInt(group.n)}

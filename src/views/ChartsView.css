@@ -175,11 +175,83 @@
 }
 
 .charts-view .chart-h {
-  max-height: min(58vh, 560px);
+  max-height: min(42vh, 420px);
   overflow: auto;
   -webkit-overflow-scrolling: touch;
   touch-action: pan-x pan-y;
   padding: 8px 6px 4px;
+}
+
+.charts-view .chart-static {
+  overflow: visible;
+  padding: 0;
+}
+
+.share-instrument {
+  display: grid;
+  gap: 0;
+}
+
+.share-arc-panel {
+  padding: 4px 4px 0;
+  border-bottom: 1px solid color-mix(in srgb, var(--accent) 22%, var(--line));
+  background: linear-gradient(180deg, color-mix(in srgb, var(--accent) 5%, transparent), transparent 70%);
+}
+
+.share-rails-panel {
+  display: grid;
+  gap: 0;
+  background: color-mix(in srgb, var(--panel-2) 65%, transparent);
+}
+
+.share-rails-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  padding: 10px 14px 4px;
+}
+
+.hud-kicker-html {
+  margin: 0;
+  color: var(--accent);
+  font-family: var(--font-display);
+  font-size: 11px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.share-rails-meta {
+  color: var(--muted);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+
+.share-rails-scroll {
+  max-height: min(36vh, 360px);
+  min-height: 120px;
+}
+
+.charts-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 40px;
+  padding: 0 4px;
+  color: var(--muted);
+  font-size: 13px;
+  cursor: pointer;
+  user-select: none;
+}
+
+.charts-toggle input {
+  width: 16px;
+  height: 16px;
+  accent-color: var(--accent);
+}
+
+.charts-status .hint-wrap {
+  margin-left: auto;
 }
 
 .charts-inspect {

@@ -1,5 +1,5 @@
-import type { Row } from '../types'
-import { roundTo } from './format'
+﻿import type { Row } from '../types'
+import { displayValue, roundTo } from './format'
 import { asNumber, asText, categoricalColumns, numericColumns } from './rows'
 import { quantile } from './crew'
 
@@ -198,7 +198,13 @@ export type BoxGroup = {
   outliers: number[]
 }
 export type BoxModel = { column: string; groups: BoxGroup[]; total: number }
-export type BarModel = { column: string; items: { label: string; n: number }[]; hidden: number; total: number }
+export type BarModel = {
+  column: string
+  items: { label: string; n: number }[]
+  hidden: number
+  total: number
+  missing: number
+}
 export type ScatterModel = {
   xCol: string
   yCol: string
@@ -209,6 +215,22 @@ export type ScatterModel = {
   total: number
 }
 export type CorrModel = { labels: string[]; matrix: (number | null)[][] }
+
+/** Canonical label key for missing category buckets. */
+export const UNASSIGNED_KEY = '__unassigned__'
+
+/** True for blank / null / na-style category values. */
+export function isMissingCategory(text: string | null | undefined): boolean {
+  if (text == null) return true
+  const trimmed = text.trim()
+  if (trimmed === '') return true
+  return /^(null|na|n\/a|none|-)$/i.test(trimmed)
+}
+
+export function categoryLabel(raw: string): string {
+  if (raw === UNASSIGNED_KEY || isMissingCategory(raw)) return 'Unassigned'
+  return displayValue(raw)
+}
 
 /** Prefer Job / Order No. when present; fall back to crew + parish-ish fields. */
 export function jobHint(row: Row, headers?: string[]): string {
@@ -324,19 +346,35 @@ export function boxplot(rows: Row[], column: string, groupCol: string): BoxModel
   return { column, groups: sliced, total: sliced.reduce((sum, group) => sum + group.n, 0) }
 }
 
-export function barCounts(rows: Row[], column: string): BarModel | null {
+export function barCounts(
+  rows: Row[],
+  column: string,
+  options?: { excludeMissing?: boolean },
+): BarModel | null {
   const counts = new Map<string, number>()
+  let missing = 0
   for (const row of rows) {
     const text = asText(row[column])
-    if (text == null) continue
-    counts.set(text, (counts.get(text) ?? 0) + 1)
+    if (isMissingCategory(text)) {
+      missing += 1
+      if (options?.excludeMissing) continue
+      counts.set(UNASSIGNED_KEY, (counts.get(UNASSIGNED_KEY) ?? 0) + 1)
+      continue
+    }
+    counts.set(text as string, (counts.get(text as string) ?? 0) + 1)
   }
   const items = [...counts.entries()]
     .map(([label, n]) => ({ label, n }))
-    .sort((a, b) => b.n - a.n)
+    .sort((a, b) => b.n - a.n || a.label.localeCompare(b.label))
   if (items.length === 0) return null
   const total = items.reduce((sum, item) => sum + item.n, 0)
-  return { column, items: items.slice(0, 24), hidden: Math.max(0, items.length - 24), total }
+  return {
+    column,
+    items: items.slice(0, 24),
+    hidden: Math.max(0, items.length - 24),
+    total,
+    missing,
+  }
 }
 
 function regression(points: { x: number; y: number }[]): { slope: number; intercept: number } {
