@@ -376,7 +376,7 @@ export function App() {
               headers={focusTable.headers}
               rows={combinedRows}
               config={config}
-              onChange={(patch) => setConfig({ ...config, ...patch })}
+              onChange={(patch) => setConfig((current) => (current ? { ...current, ...patch } : current))}
               monthLabel={activeLabel}
             />
           )}
@@ -385,7 +385,8 @@ export function App() {
               headers={focusTable.headers}
               rows={combinedRows}
               config={config}
-              onChange={(patch) => setConfig({ ...config, ...patch })}
+              onChange={(patch) => setConfig((current) => (current ? { ...current, ...patch } : current))}
+              periodLabel={activeLabel}
             />
           )}
           {ready && config && focusTable && view === 'map' && (
@@ -400,7 +401,9 @@ export function App() {
               onScopeParish={(values) => {
                 const col = parishColumn(focusTable.headers, config)
                 if (!col) return
-                setConfig({ ...config, globalFilterCol: col, globalFilterVals: values })
+                setConfig((current) =>
+                  current ? { ...current, globalFilterCol: col, globalFilterVals: values } : current,
+                )
               }}
               onJump={setView}
               onSelectCrew={setSelectedCrew}
@@ -435,7 +438,7 @@ export function App() {
             onRemoveMonth={removeMonth}
             onSheet={(name) => updateFocusMonth({ sheetName: name })}
             onHeaderRow={(row) => updateFocusMonth({ headerRow: row })}
-            onChange={(patch) => setConfig({ ...config, ...patch })}
+            onChange={(patch) => setConfig((current) => (current ? { ...current, ...patch } : current))}
             onUpload={onUpload}
             onUploadMany={ingestFiles}
             onReset={() => {

@@ -160,12 +160,6 @@ export function BarChart({ model, selected, onSelect, palette }: { model: BarMod
     })
   }
 
-  const railH = Math.max(36, Math.min(44, 320 / Math.max(model.items.length, 1)))
-  const railsHeight = 28 + model.items.length * railH + 12
-  const trackL = 168
-  const trackR = width - 96
-  const trackW = trackR - trackL
-
   return (
     <InstrumentShell label="share-arc" scroll={false}>
       <div className="share-instrument">
@@ -273,89 +267,47 @@ export function BarChart({ model, selected, onSelect, palette }: { model: BarMod
 
         <div className="share-rails-panel">
           <div className="share-rails-head">
-            <p className="hud-kicker-html">Ranked density rails</p>
+            <p className="hud-kicker-html">Full ranking</p>
             <span className="share-rails-meta">
               {formatInt(model.items.length)}
-              {model.hidden > 0 ? `+${formatInt(model.hidden)}` : ''} · tap rail to lock
+              {model.hidden > 0 ? ` · +${formatInt(model.hidden)} more` : ''} · tap to lock
             </span>
           </div>
-          <div className="share-rails-scroll chart-h">
-            <svg
-              viewBox={`0 0 ${width} ${railsHeight}`}
-              width="100%"
-              height={railsHeight}
-              className="stat-svg"
-              role="img"
-              aria-label={`Density rails for ${model.column}`}
-            >
-              <GlowDefs id={`${gid}-rails`} />
-              {model.items.map((item, index) => {
-                const topY = 8 + index * railH
-                const mid = topY + railH / 2
-                const key = item.label
-                const share = item.n / total
-                const markerX = trackL + Math.max(share * trackW, share > 0 ? 4 : 0)
-                const isSelected = selected === key
-                const active = !selected || selected === key
-                const shown = categoryLabel(item.label)
-                return (
-                  <g
-                    key={key}
-                    className="bar-row density-rail"
-                    opacity={active ? 1 : 0.22}
-                    {...rowHandlers(key, selected, onSelect)}
+          <ol className="share-rank-list" aria-label={`Ranking for ${model.column}`}>
+            {model.items.map((item, index) => {
+              const key = item.label
+              const share = item.n / total
+              const pct = share * 100
+              const isSelected = selected === key
+              const active = !selected || selected === key
+              const shown = categoryLabel(item.label)
+              return (
+                <li key={key}>
+                  <button
+                    type="button"
+                    className={
+                      isSelected ? 'share-rank-row on' : active ? 'share-rank-row' : 'share-rank-row dim'
+                    }
+                    onClick={() => toggleKey(selected, key, onSelect)}
+                    aria-pressed={isSelected}
+                    title={`${shown}: ${item.n} (${pct.toFixed(1)}%)`}
                   >
-                    {isSelected && (
-                      <rect x={8} y={topY + 2} width={width - 16} height={railH - 4} rx={8} className="bar-row-focus" />
-                    )}
-                    <text x={40} y={mid + 5} textAnchor="end" className="hud-rank">
-                      {String(index + 1).padStart(2, '0')}
-                    </text>
-                    <text x={52} y={mid + 5} className={isSelected ? 'hud-rail-label hot' : 'hud-rail-label'}>
-                      {ellipsize(shown, 14)}
-                    </text>
-                    <line
-                      x1={trackL}
-                      x2={trackR}
-                      y1={mid}
-                      y2={mid}
-                      stroke="var(--bar-track)"
-                      strokeWidth={8}
-                      strokeLinecap="round"
-                    />
-                    <line
-                      x1={trackL}
-                      x2={markerX}
-                      y1={mid}
-                      y2={mid}
-                      stroke={`url(#${gid}-rails-rail)`}
-                      strokeWidth={8}
-                      strokeLinecap="round"
-                      filter={isSelected ? `url(#${gid}-rails-glow)` : undefined}
-                    />
-                    <circle
-                      cx={markerX}
-                      cy={mid}
-                      r={isSelected ? 8 : 6}
-                      fill="var(--accent)"
-                      stroke="var(--bg-elevated)"
-                      strokeWidth={2}
-                      filter={isSelected ? `url(#${gid}-rails-glow)` : undefined}
-                    />
-                    <text x={width - 20} y={mid + 1} textAnchor="end" className="hud-callout">
-                      {formatInt(item.n)}
-                    </text>
-                    <text x={width - 20} y={mid + 14} textAnchor="end" className="hud-micro">
-                      {(share * 100).toFixed(1)}%
-                    </text>
-                    <title>
-                      {shown}: {item.n} ({(share * 100).toFixed(1)}%)
-                    </title>
-                  </g>
-                )
-              })}
-            </svg>
-          </div>
+                    <span className="share-rank-pos">{String(index + 1).padStart(2, '0')}</span>
+                    <span className="share-rank-body">
+                      <span className="share-rank-name">{shown}</span>
+                      <span className="share-rank-track" aria-hidden="true">
+                        <span className="share-rank-fill" style={{ width: `${Math.max(pct, share > 0 ? 2 : 0)}%` }} />
+                      </span>
+                    </span>
+                    <span className="share-rank-stats">
+                      <strong>{formatInt(item.n)}</strong>
+                      <em>{pct.toFixed(1)}%</em>
+                    </span>
+                  </button>
+                </li>
+              )
+            })}
+          </ol>
         </div>
       </div>
     </InstrumentShell>

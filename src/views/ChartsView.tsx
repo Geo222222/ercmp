@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
+import { useEffect, useMemo, useRef, useState, type ReactNode, type TouchEvent } from 'react'
 import type { BoardConfig, ChartType, Row } from '../types'
 import { BarChart, BoxChart, CorrChart, HistogramChart, ScatterChart } from '../components/StatCharts'
 import { Hint } from '../components/Hint'
@@ -20,17 +20,48 @@ import {
 } from '../lib/stats'
 import type { HelpKey } from '../lib/helpCopy'
 import { asNumber, asText, categoricalColumns, numericColumns } from '../lib/rows'
+import { enrichRowsWithTiming, TOTAL_MINUTES } from '../lib/chartMetrics'
 import { dateStamp, formatInt } from '../lib/format'
 import { downloadSvgAsPng } from '../lib/download'
 import { themePalette } from '../lib/theme'
 import './ChartsView.css'
 
-const TYPES: { id: ChartType; label: string; signal: string; tip: HelpKey }[] = [
-  { id: 'bar', label: 'Share', signal: 'Arc + density rails', tip: 'chartsShare' },
-  { id: 'hist', label: 'Density', signal: 'Signal silhouette', tip: 'chartsDensity' },
-  { id: 'box', label: 'Range', signal: 'Tower spread', tip: 'chartsRange' },
-  { id: 'scatter', label: 'Field', signal: 'Constellation', tip: 'chartsField' },
-  { id: 'corr', label: 'Links', signal: 'Pearson matrix', tip: 'chartsLinks' },
+const TYPES: { id: ChartType; label: string; signal: string; tip: HelpKey; blurb: string }[] = [
+  {
+    id: 'bar',
+    label: 'Share',
+    signal: 'Arc + ranking',
+    tip: 'chartsShare',
+    blurb: 'Who owns the volume — parish, crew, weather, and the long tail.',
+  },
+  {
+    id: 'hist',
+    label: 'Density',
+    signal: 'Signal silhouette',
+    tip: 'chartsDensity',
+    blurb: 'How response times (or any numeric) spread across the board.',
+  },
+  {
+    id: 'box',
+    label: 'Range',
+    signal: 'Tower spread',
+    tip: 'chartsRange',
+    blurb: 'Median, IQR, and outliers by group — where clocks get weird.',
+  },
+  {
+    id: 'scatter',
+    label: 'Field',
+    signal: 'Constellation',
+    tip: 'chartsField',
+    blurb: 'Two clock measures against each other — stage vs stage, or total vs a gap.',
+  },
+  {
+    id: 'corr',
+    label: 'Links',
+    signal: 'Pearson matrix',
+    tip: 'chartsLinks',
+    blurb: 'Which timing stages move together across jobs.',
+  },
 ]
 
 type Props = {
@@ -38,7 +69,6 @@ type Props = {
   rows: Row[]
   config: BoardConfig
   onChange: (patch: Partial<BoardConfig>) => void
-  /** Optional period label for multi-month titles later (e.g. "June 2025"). */
   periodLabel?: string
 }
 
@@ -55,12 +85,21 @@ type FocusState = {
 
 export function ChartsView({ headers, rows, config, onChange, periodLabel }: Props) {
   const frame = useRef<HTMLDivElement>(null)
+  const touchX = useRef<number | null>(null)
   const [selected, setSelected] = useState<string | null>(null)
   const [excludeMissing, setExcludeMissing] = useState(false)
   const [paletteTick, setPaletteTick] = useState(0)
-  const numeric = numericColumns(headers, rows)
-  const categorical = categoricalColumns(headers, rows)
-  const activeType = TYPES.find((type) => type.id === config.chartType) ?? TYPES[0]
+
+  const timing = useMemo(
+    () => enrichRowsWithTiming(headers, rows, config.stageCols),
+    [headers, rows, config.stageCols],
+  )
+  const chartHeaders = timing.headers
+  const chartRows = timing.rows
+  const numeric = numericColumns(chartHeaders, chartRows)
+  const categorical = categoricalColumns(chartHeaders, chartRows)
+  const modeIndex = Math.max(0, TYPES.findIndex((type) => type.id === config.chartType))
+  const activeType = TYPES[modeIndex] ?? TYPES[0]
 
   useEffect(() => {
     const sync = () => setPaletteTick((tick) => tick + 1)
@@ -73,6 +112,19 @@ export function ChartsView({ headers, rows, config, onChange, periodLabel }: Pro
   useEffect(() => {
     setSelected(null)
   }, [config.chartType, config.chartCol, config.groupCol, config.scatterX, config.scatterY, excludeMissing])
+
+  // Keep controls pointed at usable columns when the carousel lands on a mode.
+  useEffect(() => {
+    const patch = defaultsForMode(config.chartType, {
+      categorical,
+      numeric,
+      timingNumeric: timing.numericTiming,
+      stageGaps: timing.stageGaps,
+      current: config,
+    })
+    if (Object.keys(patch).length > 0) onChange(patch)
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- only re-seed when mode or metric set changes
+  }, [config.chartType, timing.numericTiming.join('|'), categorical.join('|'), numeric.join('|')])
 
   const palette = useMemo(() => {
     void paletteTick
@@ -87,8 +139,8 @@ export function ChartsView({ headers, rows, config, onChange, periodLabel }: Pro
   }, [paletteTick])
 
   const chart = renderChart({
-    rows,
-    headers,
+    rows: chartRows,
+    headers: chartHeaders,
     config,
     numeric,
     selected,
@@ -97,12 +149,32 @@ export function ChartsView({ headers, rows, config, onChange, periodLabel }: Pro
     excludeMissing,
   })
 
+  function go(delta: number) {
+    const next = (modeIndex + delta + TYPES.length) % TYPES.length
+    onChange({ chartType: TYPES[next].id })
+  }
+
+  function onTouchStart(event: TouchEvent) {
+    touchX.current = event.changedTouches[0]?.clientX ?? null
+  }
+
+  function onTouchEnd(event: TouchEvent) {
+    const start = touchX.current
+    touchX.current = null
+    if (start == null) return
+    const end = event.changedTouches[0]?.clientX ?? start
+    const delta = end - start
+    if (Math.abs(delta) < 56) return
+    go(delta < 0 ? 1 : -1)
+  }
+
   function download() {
     const svg = frame.current?.querySelector('svg')
     if (svg) downloadSvgAsPng(svg, `chart_${dateStamp()}.png`)
   }
 
   const heading = periodLabel ? `Field picture · ${periodLabel}` : 'Field picture'
+  const measureChoices = numeric.length ? numeric : timing.numericTiming
 
   return (
     <section className="panel charts-view">
@@ -110,40 +182,69 @@ export function ChartsView({ headers, rows, config, onChange, periodLabel }: Pro
         <div>
           <p className="kicker">Charts</p>
           <h2>{heading}</h2>
+          <p className="charts-lede">
+            Five instruments on the same filtered jobs — swipe or step the carousel. Timing slides use clocks built from your stage columns.
+          </p>
         </div>
         <button type="button" className="ghost" onClick={download} disabled={!chart.svg}>
           Download PNG
         </button>
       </div>
 
-      <div className="charts-status" aria-live="polite">
-        <span className="charts-live">Instrument live</span>
-        <span className="charts-mode">
-          Mode <strong>{activeType.label}</strong> · {activeType.signal}
-          {periodLabel ? ` · ${periodLabel}` : ''}
-        </span>
-        <Hint tip={activeType.tip} label={`${activeType.label} help`} />
-      </div>
+      <div className="charts-carousel" onTouchStart={onTouchStart} onTouchEnd={onTouchEnd}>
+        <div className="charts-carousel-nav">
+          <button type="button" className="charts-arrow" aria-label="Previous instrument" onClick={() => go(-1)}>
+            ‹
+          </button>
+          <div className="charts-carousel-title">
+            <p className="charts-live">Instrument live</p>
+            <h3>
+              {activeType.label}
+              <Hint tip={activeType.tip} label={`${activeType.label} help`} />
+            </h3>
+            <p className="charts-blurb">{activeType.blurb}</p>
+            <p className="charts-mode">
+              {modeIndex + 1} / {TYPES.length} · {activeType.signal}
+              {periodLabel ? ` · ${periodLabel}` : ''}
+            </p>
+          </div>
+          <button type="button" className="charts-arrow" aria-label="Next instrument" onClick={() => go(1)}>
+            ›
+          </button>
+        </div>
 
-      <div className="charts-controls">
-        <div className="seg chart-seg" role="group" aria-label="Chart type">
-          {TYPES.map((type) => (
+        <div className="charts-dots" role="tablist" aria-label="Chart instruments">
+          {TYPES.map((type, index) => (
             <button
               key={type.id}
               type="button"
-              aria-pressed={config.chartType === type.id}
+              role="tab"
+              aria-selected={index === modeIndex}
+              className={index === modeIndex ? 'charts-dot on' : 'charts-dot'}
               onClick={() => onChange({ chartType: type.id })}
+              title={type.label}
             >
-              {type.label}
+              <span>{type.label}</span>
             </button>
           ))}
         </div>
+      </div>
 
+      <div className="charts-controls">
         {config.chartType !== 'corr' && config.chartType !== 'scatter' && (
           <label className="field inline-field">
-            <span>Column</span>
-            <select value={config.chartCol} onChange={(event) => onChange({ chartCol: event.target.value })}>
-              {(config.chartType === 'bar' ? categorical : numeric).map((column) => (
+            <span>{config.chartType === 'bar' ? 'Category' : 'Measure'}</span>
+            <select
+              value={
+                config.chartType === 'bar'
+                  ? config.chartCol
+                  : measureChoices.includes(config.chartCol)
+                    ? config.chartCol
+                    : measureChoices[0] ?? ''
+              }
+              onChange={(event) => onChange({ chartCol: event.target.value })}
+            >
+              {(config.chartType === 'bar' ? categorical : measureChoices).map((column) => (
                 <option key={column} value={column}>
                   {column}
                 </option>
@@ -179,8 +280,11 @@ export function ChartsView({ headers, rows, config, onChange, periodLabel }: Pro
           <div className="split-fields">
             <label className="field">
               <span>X</span>
-              <select value={config.scatterX} onChange={(event) => onChange({ scatterX: event.target.value })}>
-                {numeric.map((column) => (
+              <select
+                value={measureChoices.includes(config.scatterX) ? config.scatterX : measureChoices[0] ?? ''}
+                onChange={(event) => onChange({ scatterX: event.target.value })}
+              >
+                {measureChoices.map((column) => (
                   <option key={column} value={column}>
                     {column}
                   </option>
@@ -189,8 +293,11 @@ export function ChartsView({ headers, rows, config, onChange, periodLabel }: Pro
             </label>
             <label className="field">
               <span>Y</span>
-              <select value={config.scatterY} onChange={(event) => onChange({ scatterY: event.target.value })}>
-                {numeric.map((column) => (
+              <select
+                value={measureChoices.includes(config.scatterY) ? config.scatterY : measureChoices[1] ?? measureChoices[0] ?? ''}
+                onChange={(event) => onChange({ scatterY: event.target.value })}
+              >
+                {measureChoices.map((column) => (
                   <option key={column} value={column}>
                     {column}
                   </option>
@@ -199,22 +306,70 @@ export function ChartsView({ headers, rows, config, onChange, periodLabel }: Pro
             </label>
           </div>
         )}
+        {timing.numericTiming.length > 0 && config.chartType !== 'bar' && (
+          <p className="charts-timing-note">
+            Timing fields from stages: {timing.numericTiming.slice(0, 4).join(' · ')}
+            {timing.numericTiming.length > 4 ? '…' : ''}
+          </p>
+        )}
       </div>
 
       {chart.focus && <InspectCard focus={chart.focus} onClear={() => setSelected(null)} />}
 
-      <div ref={frame} className="charts-frame">
+      <div ref={frame} className="charts-frame charts-slide" key={activeType.id}>
         {chart.svg ? <InstrumentChassis>{chart.node}</InstrumentChassis> : chart.node}
       </div>
 
       {chart.note && <p className="hint charts-hint-live">{chart.note}</p>}
       {chart.svg && !chart.focus && (
-        <p className="hint charts-hint-live">
-          Tap to lock focus — count, share, and sample jobs appear above the instrument.
-        </p>
+        <p className="hint charts-hint-live">Tap the instrument to lock focus — details open above.</p>
       )}
     </section>
   )
+}
+
+function defaultsForMode(
+  type: ChartType,
+  args: {
+    categorical: string[]
+    numeric: string[]
+    timingNumeric: string[]
+    stageGaps: string[]
+    current: BoardConfig
+  },
+): Partial<BoardConfig> {
+  const { categorical, numeric, timingNumeric, stageGaps, current } = args
+  const measures = numeric.length ? numeric : timingNumeric
+  const patch: Partial<BoardConfig> = {}
+
+  if (type === 'bar') {
+    if (!categorical.includes(current.chartCol) && categorical[0]) patch.chartCol = categorical[0]
+    return patch
+  }
+
+  if (type === 'hist' || type === 'box') {
+    const preferred = measures.includes(TOTAL_MINUTES) ? TOTAL_MINUTES : measures[0]
+    if (preferred && !measures.includes(current.chartCol)) patch.chartCol = preferred
+    if (type === 'box' && current.groupCol !== 'none' && !categorical.includes(current.groupCol)) {
+      if (categorical.includes('Parish')) patch.groupCol = 'Parish'
+      else if (categorical[0]) patch.groupCol = categorical[0]
+      else patch.groupCol = 'none'
+    }
+  }
+
+  if (type === 'scatter') {
+    const x = stageGaps[0] ?? measures[0] ?? ''
+    const y = stageGaps[1] ?? measures.find((name) => name !== x) ?? measures[0] ?? ''
+    const xBad = !current.scatterX || !measures.includes(current.scatterX)
+    const yBad =
+      !current.scatterY ||
+      !measures.includes(current.scatterY) ||
+      current.scatterY === (xBad ? x : current.scatterX)
+    if (x && xBad) patch.scatterX = x
+    if (y && yBad) patch.scatterY = y
+  }
+
+  return patch
 }
 
 function InstrumentChassis({ children }: { children: ReactNode }) {
@@ -233,6 +388,12 @@ function InstrumentChassis({ children }: { children: ReactNode }) {
 
 function InspectCard({ focus, onClear }: { focus: FocusState; onClear: () => void }) {
   const sharePct = focus.share == null ? null : Math.max(0, Math.min(100, focus.share * 100))
+  const shareDisplay =
+    focus.share == null
+      ? '—'
+      : focus.shareLabel === '|r|'
+        ? focus.share.toFixed(3)
+        : `${sharePct!.toFixed(1)}%`
   return (
     <div className="charts-inspect">
       <div className="charts-inspect-head">
@@ -252,13 +413,20 @@ function InspectCard({ focus, onClear }: { focus: FocusState; onClear: () => voi
         </div>
         <div className="metric-chip">
           <span>{focus.shareLabel ?? 'Share'}</span>
-          <strong>{sharePct == null ? '—' : `${sharePct.toFixed(1)}%`}</strong>
+          <strong>{shareDisplay}</strong>
         </div>
       </div>
-      {sharePct != null && (
+      {sharePct != null && focus.shareLabel !== '|r|' && (
         <div className="charts-share" aria-hidden="true">
           <div className="charts-share-track">
             <span className="charts-share-fill" style={{ width: `${sharePct}%` }} />
+          </div>
+        </div>
+      )}
+      {focus.shareLabel === '|r|' && focus.share != null && (
+        <div className="charts-share" aria-hidden="true">
+          <div className="charts-share-track">
+            <span className="charts-share-fill" style={{ width: `${Math.abs(focus.share) * 100}%` }} />
           </div>
         </div>
       )}
@@ -302,14 +470,15 @@ function renderChart(args: RenderArgs): { node: ReactNode; svg: boolean; note?: 
   const { rows, headers, config, numeric, selected, onSelect, palette, excludeMissing } = args
 
   if (config.chartType === 'corr') {
-    const model = correlation(rows, numeric.length ? numeric : config.analysisCols)
+    const corrCols = numeric.length >= 2 ? numeric : config.analysisCols
+    const model = correlation(rows, corrCols)
     if (!model) {
       return {
         svg: false,
         node: (
           <EmptyInstrument
-            title="Correlation needs numbers"
-            body="This workbook’s measurements live on the command board as stage response times. Switch to Share for categories, or open Command for crew clocks."
+            title="Need timing fields"
+            body="Links needs at least two numeric measures. Set timestamp stages in Setup so Total minutes and stage gaps can be built."
           />
         ),
       }
@@ -327,30 +496,32 @@ function renderChart(args: RenderArgs): { node: ReactNode; svg: boolean; note?: 
       svg: false,
       node: (
         <EmptyInstrument
-          title="No numeric columns on this sheet"
-          body="Use Share for categories (parish, crew, weather), or the command board for response-time instruments."
+          title="No measures yet"
+          body="Open Setup and pick at least two timestamp columns in order. Charts then builds Total minutes and stage gaps automatically."
         />
       ),
     }
   }
 
   if (config.chartType === 'hist') {
-    const model = histogram(rows, config.chartCol || numeric[0])
+    const col = numeric.includes(config.chartCol) ? config.chartCol : numeric[0]
+    const model = histogram(rows, col)
     if (!model) {
-      return { svg: false, node: <EmptyInstrument title="Empty column" body="No numeric values in that column." /> }
+      return { svg: false, node: <EmptyInstrument title="Empty measure" body="No numeric values in that column after filters." /> }
     }
     return {
       svg: true,
       node: <HistogramChart model={model} selected={selected} onSelect={onSelect} palette={palette} />,
       focus: histFocus(model, rows, headers, selected),
-      note: `Density signal of ${model.column} · ${formatInt(model.total)} values · tap a node to lock a bin.`,
+      note: `Density of ${model.column} · ${formatInt(model.total)} values · tap a node to lock a bin.`,
     }
   }
 
   if (config.chartType === 'box') {
-    const model = boxplot(rows, config.chartCol || numeric[0], config.groupCol)
+    const col = numeric.includes(config.chartCol) ? config.chartCol : numeric[0]
+    const model = boxplot(rows, col, config.groupCol)
     if (!model) {
-      return { svg: false, node: <EmptyInstrument title="Empty column" body="No numeric values in that column." /> }
+      return { svg: false, node: <EmptyInstrument title="Empty measure" body="No numeric values in that column after filters." /> }
     }
     return {
       svg: true,
@@ -361,14 +532,19 @@ function renderChart(args: RenderArgs): { node: ReactNode; svg: boolean; note?: 
   }
 
   if (config.chartType === 'scatter') {
-    const model = scatter(rows, config.scatterX, config.scatterY)
+    const xCol = numeric.includes(config.scatterX) ? config.scatterX : numeric[0]
+    const yCol =
+      numeric.includes(config.scatterY) && config.scatterY !== xCol
+        ? config.scatterY
+        : numeric.find((name) => name !== xCol) ?? numeric[1] ?? numeric[0]
+    const model = scatter(rows, xCol, yCol)
     if (!model) {
       return {
         svg: false,
         node: (
           <EmptyInstrument
             title="Need overlapping pairs"
-            body="Pick two numeric columns that both have values on the same jobs."
+            body="Pick two timing measures that both have values on the same jobs."
           />
         ),
       }
@@ -383,13 +559,13 @@ function renderChart(args: RenderArgs): { node: ReactNode; svg: boolean; note?: 
     }
   }
 
-  if (categoricalColumns(headers, rows).length === 0 && config.chartType === 'bar') {
+  if (categoricalColumns(headers, rows).length === 0) {
     return {
       svg: false,
       node: (
         <EmptyInstrument
           title="No categories to count"
-          body="This sheet has nothing categorical for the share instrument. Try a different sheet, or Density if numbers are present."
+          body="Share needs a categorical column. Try Density for Total minutes instead."
         />
       ),
     }
@@ -404,7 +580,7 @@ function renderChart(args: RenderArgs): { node: ReactNode; svg: boolean; note?: 
           title={excludeMissing ? 'Only Unassigned left' : 'No values to count'}
           body={
             excludeMissing
-              ? 'Turn off Exclude Unassigned, or pick another column — every remaining value was blank/null.'
+              ? 'Turn off Exclude Unassigned, or pick another column.'
               : 'That column is empty after filters.'
           }
         />
@@ -418,7 +594,7 @@ function renderChart(args: RenderArgs): { node: ReactNode; svg: boolean; note?: 
     note:
       model.missing > 0 && !excludeMissing
         ? `Unassigned shown as its own rail (${formatInt(model.missing)}). Toggle Exclude Unassigned to hide.`
-        : 'Arc for leaders · density rails below for the full ranking · tap to lock.',
+        : 'Arc for leaders · full ranking below · tap to lock.',
   }
 }
 
@@ -496,7 +672,7 @@ function boxFocus(
       4,
       headers,
     ),
-    detail: `Median ${group.median.toFixed(2)} · IQR ${group.q1.toFixed(2)}–${group.q3.toFixed(2)} · ${group.outliers.length} outliers shown`,
+    detail: `Median ${group.median.toFixed(1)} · IQR ${group.q1.toFixed(1)}–${group.q3.toFixed(1)} · ${group.outliers.length} outliers shown`,
   }
 }
 
@@ -511,8 +687,8 @@ function scatterFocus(
   if (!point) return undefined
   const row = rows[point.index]
   return {
-    title: `${model.xCol} ${point.x.toFixed(2)}`,
-    subtitle: `${model.yCol} ${point.y.toFixed(2)}`,
+    title: `${model.xCol} ${point.x.toFixed(1)}`,
+    subtitle: `${model.yCol} ${point.y.toFixed(1)}`,
     count: 1,
     share: model.total ? 1 / model.total : null,
     samples: row ? sampleJobHints([row], () => true, 1, headers) : [],
@@ -527,23 +703,14 @@ function corrFocus(model: CorrModel, selected: string | null): FocusState | unde
   const colIndex = Number(colText)
   const value = model.matrix[rowIndex]?.[colIndex]
   if (value == null) return undefined
-  const abs = Math.abs(value)
   return {
-    title: `${model.labels[rowIndex]} × ${model.labels[colIndex]}`,
-    subtitle: 'Pearson correlation',
+    title: model.labels[rowIndex],
+    subtitle: model.labels[colIndex],
     count: null,
-    countLabel: 'r',
-    share: abs,
-    shareLabel: '|r|',
+    share: Math.abs(value),
     samples: [],
-    detail: `r = ${value.toFixed(3)} · ${strengthLabel(value)}`,
+    detail: `Pearson r = ${value.toFixed(3)}`,
+    countLabel: 'Pair',
+    shareLabel: '|r|',
   }
-}
-
-function strengthLabel(value: number): string {
-  const abs = Math.abs(value)
-  if (abs >= 0.7) return 'strong link'
-  if (abs >= 0.4) return 'moderate link'
-  if (abs >= 0.2) return 'weak link'
-  return 'little linear link'
 }

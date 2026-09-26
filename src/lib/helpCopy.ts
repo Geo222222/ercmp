@@ -53,7 +53,7 @@ export const HELP = {
     'Tap a value to push it into the board filters and dive in. Clear on the focus board to reopen the full working set.',
 
   chartsShare:
-    'Share mode: arc for the leaders, density rails for the full ranking. Tap an arc wedge, legend row, or rail to lock focus and inspect sample jobs.',
+    'Share mode: arc for the leaders, full ranking below with density bars. Tap an arc wedge, legend row, or rank row to lock focus and inspect sample jobs.',
 
   chartsDensity:
     'Density mode: numeric distribution as a signal silhouette. Tap a node to lock that bin range and inspect sample jobs.',

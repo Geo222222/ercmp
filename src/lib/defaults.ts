@@ -44,7 +44,7 @@ export function defaultConfig(table: DataTable): BoardConfig {
     stageCols: defaultStages(headers),
     minJobs: 1,
     analysisCols,
-    groupCol: 'none',
+    groupCol: parish ?? 'none',
     chartType: 'bar',
     chartCol,
     scatterX: numeric[0] ?? '',
