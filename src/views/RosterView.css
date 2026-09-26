@@ -44,6 +44,127 @@
   width: 100%;
 }
 
+.roster-toolbar {
+  display: grid;
+  gap: var(--space-3);
+  padding: var(--space-3);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background:
+    linear-gradient(180deg, color-mix(in srgb, var(--accent) 5%, transparent), transparent 55%),
+    var(--bg-elevated);
+}
+
+.roster-control {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+}
+
+.roster-control-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.roster-control-head span {
+  color: var(--muted);
+  font-family: var(--font-display);
+  font-size: 12px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.roster-text-btn {
+  border: 0;
+  background: transparent;
+  color: var(--accent);
+  font-family: var(--font-display);
+  font-size: 12px;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  min-height: 32px;
+  padding: 0 4px;
+  cursor: pointer;
+}
+
+.roster-text-btn:disabled {
+  color: var(--faint);
+  cursor: default;
+}
+
+.roster-crew-search input,
+.roster-sort select {
+  width: 100%;
+  min-height: var(--touch);
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius);
+  border: 1px solid var(--line-strong);
+  background: var(--input-bg);
+  color: inherit;
+  font: inherit;
+}
+
+.roster-selected-chips,
+.roster-chip-scroll {
+  display: flex;
+  flex-wrap: nowrap;
+  gap: 8px;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  padding-bottom: 2px;
+  scrollbar-width: thin;
+}
+
+.roster-selected-chips {
+  flex-wrap: wrap;
+}
+
+.filter-chip {
+  flex: 0 0 auto;
+  min-height: 40px;
+  padding: 0 14px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--line-strong);
+  background: var(--input-bg);
+  color: var(--text);
+  font-family: var(--font-display);
+  letter-spacing: 0.03em;
+  font-size: 13px;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.filter-chip.on {
+  background: var(--accent-soft);
+  border-color: var(--accent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 35%, transparent);
+}
+
+.filter-chip span {
+  margin-left: 8px;
+  color: var(--muted);
+}
+
+.roster-chip-empty {
+  margin: 0;
+  color: var(--muted);
+  font-size: 13px;
+  padding: 8px 0;
+}
+
+.roster-sort-control {
+  align-content: start;
+}
+
+@media (min-width: 900px) {
+  .roster-toolbar {
+    grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr) minmax(180px, 0.7fr);
+    align-items: start;
+  }
+}
+
 .roster-kpis {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));

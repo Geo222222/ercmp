@@ -103,10 +103,51 @@ function jobKey(row: Row, index: number, jobCol: string | null): string {
   return id || `row-${index}`
 }
 
+function crewLabel(row: Row, crewCol: string): string {
+  if (!crewCol) return 'Unassigned'
+  return displayValue(cellText(row[crewCol]) || 'Unassigned')
+}
+
+function parishLabel(row: Row, parishCol: string): string {
+  if (!parishCol) return 'Unassigned'
+  return displayValue(cellText(row[parishCol]) || 'Unassigned')
+}
+
+function totalClock(row: Row, stages: string[]): number | null {
+  if (stages.length < 2) return null
+  const first = parseFlexibleDatetime(row[stages[0]])
+  const last = parseFlexibleDatetime(row[stages[stages.length - 1]])
+  if (!first || !last) return null
+  return minutesBetween(last, first)
+}
+
+function uniqueSorted(values: string[]): string[] {
+  return Array.from(new Set(values)).sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' }))
+}
+
+type SortMode = 'crew-asc' | 'crew-desc' | 'clock-desc' | 'clock-asc' | 'parish-asc' | 'job-asc'
+
+const SORT_OPTIONS: { value: SortMode; label: string; needs: 'crew' | 'clock' | 'parish' | 'job' | 'any' }[] = [
+  { value: 'crew-asc', label: 'Crew A–Z', needs: 'crew' },
+  { value: 'crew-desc', label: 'Crew Z–A', needs: 'crew' },
+  { value: 'clock-desc', label: 'Clock · longest', needs: 'clock' },
+  { value: 'clock-asc', label: 'Clock · shortest', needs: 'clock' },
+  { value: 'parish-asc', label: 'Parish A–Z', needs: 'parish' },
+  { value: 'job-asc', label: 'Job id', needs: 'job' },
+]
+
+function compareText(a: string, b: string): number {
+  return a.localeCompare(b, undefined, { sensitivity: 'base', numeric: true })
+}
+
 export function RosterView({ headers, rows, stageCols, crewCol, parishCol, monthCol }: Props) {
   const [query, setQuery] = useState('')
   const [page, setPage] = useState(0)
   const [monthFilter, setMonthFilter] = useState<string | null>(null)
+  const [crewFilter, setCrewFilter] = useState<string[]>([])
+  const [parishFilter, setParishFilter] = useState<string[]>([])
+  const [crewNeedle, setCrewNeedle] = useState('')
+  const [sortMode, setSortMode] = useState<SortMode>('crew-asc')
   const [selectedKey, setSelectedKey] = useState<string | null>(null)
 
   const resolved = useMemo(() => {
@@ -131,19 +172,105 @@ export function RosterView({ headers, rows, stageCols, crewCol, parishCol, month
     return Array.from(set).sort()
   }, [rows, resolved.month])
 
+  const monthScoped = useMemo(() => {
+    if (!monthFilter) return rows
+    return rows.filter((row) => monthFromRow(row, resolved.month) === monthFilter)
+  }, [rows, monthFilter, resolved.month])
+
+  const crewsPresent = useMemo(
+    () => uniqueSorted(monthScoped.map((row) => crewLabel(row, resolved.crew))),
+    [monthScoped, resolved.crew],
+  )
+
+  const parishesPresent = useMemo(() => {
+    if (!resolved.parish) return [] as string[]
+    return uniqueSorted(monthScoped.map((row) => parishLabel(row, resolved.parish)))
+  }, [monthScoped, resolved.parish])
+
+  const sortOptions = useMemo(() => {
+    return SORT_OPTIONS.filter((option) => {
+      if (option.needs === 'any') return true
+      if (option.needs === 'crew') return Boolean(resolved.crew) || crewsPresent.length > 0
+      if (option.needs === 'clock') return resolved.stages.length >= 2
+      if (option.needs === 'parish') return Boolean(resolved.parish)
+      if (option.needs === 'job') return Boolean(resolved.job)
+      return true
+    })
+  }, [resolved.crew, resolved.stages.length, resolved.parish, resolved.job, crewsPresent.length])
+
   useEffect(() => {
     if (monthFilter && !monthsPresent.includes(monthFilter)) setMonthFilter(null)
   }, [monthFilter, monthsPresent])
 
+  useEffect(() => {
+    setCrewFilter((prev) => {
+      const next = prev.filter((crew) => crewsPresent.includes(crew))
+      return next.length === prev.length ? prev : next
+    })
+  }, [crewsPresent])
+
+  useEffect(() => {
+    setParishFilter((prev) => {
+      const next = prev.filter((parish) => parishesPresent.includes(parish))
+      return next.length === prev.length ? prev : next
+    })
+  }, [parishesPresent])
+
+  useEffect(() => {
+    if (!sortOptions.some((option) => option.value === sortMode)) {
+      setSortMode(sortOptions[0]?.value ?? 'crew-asc')
+    }
+  }, [sortOptions, sortMode])
+
   const filtered = useMemo(() => {
     const needle = query.trim().toLowerCase()
-    return rows.filter((row) => {
-      const month = monthFromRow(row, resolved.month)
-      if (monthFilter && month !== monthFilter) return false
+    const crewSet = crewFilter.length > 0 ? new Set(crewFilter) : null
+    const parishSet = parishFilter.length > 0 ? new Set(parishFilter) : null
+
+    const list = monthScoped.filter((row) => {
+      if (crewSet && !crewSet.has(crewLabel(row, resolved.crew))) return false
+      if (parishSet && !parishSet.has(parishLabel(row, resolved.parish))) return false
       if (!needle) return true
       return headers.some((header) => String(row[header] ?? '').toLowerCase().includes(needle))
     })
-  }, [headers, rows, query, monthFilter, resolved.month])
+
+    const ranked = [...list]
+    ranked.sort((a, b) => {
+      if (sortMode === 'crew-asc' || sortMode === 'crew-desc') {
+        const cmp = compareText(crewLabel(a, resolved.crew), crewLabel(b, resolved.crew))
+        return sortMode === 'crew-asc' ? cmp : -cmp
+      }
+      if (sortMode === 'clock-desc' || sortMode === 'clock-asc') {
+        const clockA = totalClock(a, resolved.stages)
+        const clockB = totalClock(b, resolved.stages)
+        if (clockA == null && clockB == null) return compareText(crewLabel(a, resolved.crew), crewLabel(b, resolved.crew))
+        if (clockA == null) return 1
+        if (clockB == null) return -1
+        const cmp = clockA - clockB
+        return sortMode === 'clock-asc' ? cmp : -cmp
+      }
+      if (sortMode === 'parish-asc') {
+        const cmp = compareText(parishLabel(a, resolved.parish), parishLabel(b, resolved.parish))
+        return cmp || compareText(crewLabel(a, resolved.crew), crewLabel(b, resolved.crew))
+      }
+      if (sortMode === 'job-asc' && resolved.job) {
+        return compareText(cellText(a[resolved.job]), cellText(b[resolved.job]))
+      }
+      return 0
+    })
+    return ranked
+  }, [
+    headers,
+    monthScoped,
+    query,
+    crewFilter,
+    parishFilter,
+    sortMode,
+    resolved.crew,
+    resolved.parish,
+    resolved.stages,
+    resolved.job,
+  ])
 
   const pageCount = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE))
   const safePage = Math.min(page, pageCount - 1)
@@ -173,6 +300,32 @@ export function RosterView({ headers, rows, stageCols, crewCol, parishCol, month
     }, 0)
   }, [filtered, resolved.stages])
 
+  const crewChoices = useMemo(() => {
+    const needle = crewNeedle.trim().toLowerCase()
+    if (!needle) return crewsPresent
+    return crewsPresent.filter((crew) => crew.toLowerCase().includes(needle))
+  }, [crewsPresent, crewNeedle])
+
+  const filtersActive = crewFilter.length > 0 || parishFilter.length > 0 || Boolean(query) || Boolean(monthFilter)
+
+  function toggleCrew(crew: string) {
+    setCrewFilter((prev) => (prev.includes(crew) ? prev.filter((item) => item !== crew) : [...prev, crew]))
+    setPage(0)
+  }
+
+  function toggleParish(parish: string) {
+    setParishFilter((prev) => (prev.includes(parish) ? prev.filter((item) => item !== parish) : [...prev, parish]))
+    setPage(0)
+  }
+
+  function clearSmartFilters() {
+    setCrewFilter([])
+    setParishFilter([])
+    setCrewNeedle('')
+    setQuery('')
+    setPage(0)
+  }
+
   return (
     <div className="roster-view">
       <section className="panel roster-instrument">
@@ -180,7 +333,7 @@ export function RosterView({ headers, rows, stageCols, crewCol, parishCol, month
           <div>
             <p className="kicker">Roster</p>
             <h2>Job instrument</h2>
-            <p className="roster-lede">Search the working set, open a job, read the clock trail.</p>
+            <p className="roster-lede">Filter crews, sort the board, open a job and read the clock trail.</p>
           </div>
           <label className="roster-search">
             <span className="visually-hidden">Search jobs</span>
@@ -196,11 +349,132 @@ export function RosterView({ headers, rows, stageCols, crewCol, parishCol, month
           </label>
         </div>
 
+        <div className="roster-toolbar" aria-label="Roster smart list controls">
+          <div className="roster-control roster-crew-control">
+            <div className="roster-control-head">
+              <span>Crew</span>
+              <button
+                type="button"
+                className="roster-text-btn"
+                disabled={crewFilter.length === 0}
+                onClick={() => {
+                  setCrewFilter([])
+                  setPage(0)
+                }}
+              >
+                All crews
+              </button>
+            </div>
+            <label className="roster-crew-search">
+              <span className="visually-hidden">Find crew</span>
+              <input
+                type="search"
+                value={crewNeedle}
+                placeholder={crewsPresent.length ? `Find among ${crewsPresent.length} crews` : 'No crews in view'}
+                onChange={(event) => setCrewNeedle(event.target.value)}
+                disabled={crewsPresent.length === 0}
+              />
+            </label>
+            {crewFilter.length > 0 && (
+              <div className="roster-selected-chips" aria-label="Selected crews">
+                {crewFilter.map((crew) => (
+                  <button key={crew} type="button" className="filter-chip on" onClick={() => toggleCrew(crew)}>
+                    {crew}
+                    <span aria-hidden="true">×</span>
+                  </button>
+                ))}
+              </div>
+            )}
+            <div className="roster-chip-scroll" role="group" aria-label="Crew filter">
+              {crewChoices.length === 0 ? (
+                <p className="roster-chip-empty">{crewNeedle ? 'No crew matches' : 'No crews in this set'}</p>
+              ) : (
+                crewChoices.map((crew) => {
+                  const on = crewFilter.includes(crew)
+                  return (
+                    <button
+                      key={crew}
+                      type="button"
+                      className={on ? 'filter-chip on' : 'filter-chip'}
+                      aria-pressed={on}
+                      onClick={() => toggleCrew(crew)}
+                    >
+                      {crew}
+                    </button>
+                  )
+                })
+              )}
+            </div>
+          </div>
+
+          {parishesPresent.length > 0 && (
+            <div className="roster-control">
+              <div className="roster-control-head">
+                <span>Parish</span>
+                <button
+                  type="button"
+                  className="roster-text-btn"
+                  disabled={parishFilter.length === 0}
+                  onClick={() => {
+                    setParishFilter([])
+                    setPage(0)
+                  }}
+                >
+                  All parishes
+                </button>
+              </div>
+              <div className="roster-chip-scroll" role="group" aria-label="Parish filter">
+                {parishesPresent.map((parish) => {
+                  const on = parishFilter.includes(parish)
+                  return (
+                    <button
+                      key={parish}
+                      type="button"
+                      className={on ? 'filter-chip on' : 'filter-chip'}
+                      aria-pressed={on}
+                      onClick={() => toggleParish(parish)}
+                    >
+                      {parish}
+                    </button>
+                  )
+                })}
+              </div>
+            </div>
+          )}
+
+          <div className="roster-control roster-sort-control">
+            <div className="roster-control-head">
+              <span>Sort</span>
+              {(crewFilter.length > 0 || parishFilter.length > 0 || query) && (
+                <button type="button" className="roster-text-btn" onClick={clearSmartFilters}>
+                  Clear filters
+                </button>
+              )}
+            </div>
+            <label className="roster-sort">
+              <span className="visually-hidden">Sort jobs</span>
+              <select
+                value={sortMode}
+                onChange={(event) => {
+                  setSortMode(event.target.value as SortMode)
+                  setPage(0)
+                }}
+              >
+                {sortOptions.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+          </div>
+        </div>
+
         <div className="roster-kpis" aria-label="Roster metrics">
           <div className="roster-kpi">
             <span>In view</span>
             <strong>{formatInt(filtered.length)}</strong>
-            <small>{query || monthFilter ? 'After search / month cut' : 'Working rows'}</small>
+            <small>{filtersActive ? 'Smart list after filters' : 'Working rows'}</small>
           </div>
           <div className="roster-kpi">
             <span>Page</span>
@@ -219,13 +493,11 @@ export function RosterView({ headers, rows, stageCols, crewCol, parishCol, month
                 : 'Add timestamp columns in filters'}
             </small>
           </div>
-          {monthsPresent.length > 0 && (
-            <div className="roster-kpi">
-              <span>Months</span>
-              <strong>{formatInt(monthsPresent.length)}</strong>
-              <small>{monthFilter ? `Focus · ${monthFilter}` : 'Chip filter ready'}</small>
-            </div>
-          )}
+          <div className="roster-kpi">
+            <span>Crews lit</span>
+            <strong>{formatInt(crewFilter.length > 0 ? crewFilter.length : crewsPresent.length)}</strong>
+            <small>{crewFilter.length > 0 ? 'Selected crews' : 'In month / working set'}</small>
+          </div>
         </div>
 
         {monthsPresent.length > 0 && (
@@ -257,7 +529,7 @@ export function RosterView({ headers, rows, stageCols, crewCol, parishCol, month
         )}
 
         {slice.length === 0 ? (
-          <p className="roster-empty">No jobs match this search.</p>
+          <p className="roster-empty">No jobs match this smart list.</p>
         ) : (
           <ul className="roster-cards">
             {slice.map((row, index) => {
@@ -265,14 +537,11 @@ export function RosterView({ headers, rows, stageCols, crewCol, parishCol, month
               const key = jobKey(row, absolute, resolved.job)
               const timeline = buildTimeline(row, resolved.stages)
               const stamped = timeline.filter((point) => point.at).length
-              const totalGap =
-                timeline.length >= 2 && timeline[0].at && timeline[timeline.length - 1].at
-                  ? minutesBetween(timeline[timeline.length - 1].at!, timeline[0].at!)
-                  : null
+              const totalGap = totalClock(row, resolved.stages)
               const month = monthFromRow(row, resolved.month)
               const jobId = resolved.job ? cellText(row[resolved.job]) : ''
-              const crew = resolved.crew ? displayValue(cellText(row[resolved.crew]) || 'Unassigned') : '—'
-              const parish = resolved.parish ? displayValue(cellText(row[resolved.parish]) || 'Unassigned') : '—'
+              const crew = crewLabel(row, resolved.crew)
+              const parish = resolved.parish ? parishLabel(row, resolved.parish) : '—'
               const type = resolved.type ? cellText(row[resolved.type]) : ''
               const active = selectedKey === key
 
