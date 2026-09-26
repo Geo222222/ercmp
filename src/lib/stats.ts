@@ -1,4 +1,4 @@
-﻿import type { Row } from '../types'
+import type { Row } from '../types'
 import { roundTo } from './format'
 import { asNumber, asText, categoricalColumns, numericColumns } from './rows'
 import { quantile } from './crew'
@@ -185,9 +185,11 @@ export function descriptiveStats(rows: Row[], columns: string[], groupCol: strin
   }
 }
 
-export type HistModel = { column: string; bins: { label: string; n: number }[] }
+export type HistBin = { label: string; n: number; lo: number; hi: number }
+export type HistModel = { column: string; bins: HistBin[]; total: number }
 export type BoxGroup = {
   name: string
+  n: number
   low: number
   q1: number
   median: number
@@ -195,17 +197,53 @@ export type BoxGroup = {
   high: number
   outliers: number[]
 }
-export type BoxModel = { column: string; groups: BoxGroup[] }
-export type BarModel = { column: string; items: { label: string; n: number }[]; hidden: number }
+export type BoxModel = { column: string; groups: BoxGroup[]; total: number }
+export type BarModel = { column: string; items: { label: string; n: number }[]; hidden: number; total: number }
 export type ScatterModel = {
   xCol: string
   yCol: string
-  points: { x: number; y: number }[]
+  points: { x: number; y: number; index: number }[]
   slope: number
   intercept: number
   hidden: number
+  total: number
 }
 export type CorrModel = { labels: string[]; matrix: (number | null)[][] }
+
+/** Prefer Job / Order No. when present; fall back to crew + parish-ish fields. */
+export function jobHint(row: Row, headers?: string[]): string {
+  const keys = headers ?? Object.keys(row)
+  const preferred = keys.find((key) => /^(job|order no\.?|order number|wo|work order)$/i.test(key))
+  if (preferred) {
+    const text = asText(row[preferred])
+    if (text) return text
+  }
+  const crew = keys.find((key) => /^crew$/i.test(key))
+  const parish = keys.find((key) => /^parish$/i.test(key))
+  const parts = [crew && asText(row[crew]), parish && asText(row[parish])].filter(Boolean)
+  if (parts.length) return parts.join(' · ')
+  const first = keys.map((key) => asText(row[key])).find(Boolean)
+  return first ?? 'Job'
+}
+
+export function sampleJobHints(
+  rows: Row[],
+  match: (row: Row) => boolean,
+  limit = 4,
+  headers?: string[],
+): string[] {
+  const hints: string[] = []
+  const seen = new Set<string>()
+  for (const row of rows) {
+    if (!match(row)) continue
+    const hint = jobHint(row, headers)
+    if (seen.has(hint)) continue
+    seen.add(hint)
+    hints.push(hint)
+    if (hints.length >= limit) break
+  }
+  return hints
+}
 
 function columnNumbers(rows: Row[], column: string): number[] {
   const values: number[] = []
@@ -232,10 +270,18 @@ export function histogram(rows: Row[], column: string): HistModel | null {
   }
   return {
     column,
-    bins: counts.map((n, index) => ({
-      label: (min + index * width).toFixed(max - min > 10 ? 0 : 1),
-      n,
-    })),
+    total: values.length,
+    bins: counts.map((n, index) => {
+      const lo = min + index * width
+      const hi = index === bins - 1 ? max : min + (index + 1) * width
+      const digits = max - min > 10 ? 0 : 1
+      return {
+        label: lo.toFixed(digits),
+        n,
+        lo,
+        hi,
+      }
+    }),
   }
 }
 
@@ -263,6 +309,7 @@ export function boxplot(rows: Row[], column: string, groupCol: string): BoxModel
     const outliers = sorted.filter((value) => value < fenceLow || value > fenceHigh).slice(0, 40)
     return {
       name,
+      n: sorted.length,
       low: inside[0] ?? sorted[0],
       q1,
       median: med,
@@ -273,7 +320,8 @@ export function boxplot(rows: Row[], column: string, groupCol: string): BoxModel
   })
 
   groups.sort((a, b) => b.median - a.median)
-  return { column, groups: groups.slice(0, 24) }
+  const sliced = groups.slice(0, 24)
+  return { column, groups: sliced, total: sliced.reduce((sum, group) => sum + group.n, 0) }
 }
 
 export function barCounts(rows: Row[], column: string): BarModel | null {
@@ -287,7 +335,8 @@ export function barCounts(rows: Row[], column: string): BarModel | null {
     .map(([label, n]) => ({ label, n }))
     .sort((a, b) => b.n - a.n)
   if (items.length === 0) return null
-  return { column, items: items.slice(0, 24), hidden: Math.max(0, items.length - 24) }
+  const total = items.reduce((sum, item) => sum + item.n, 0)
+  return { column, items: items.slice(0, 24), hidden: Math.max(0, items.length - 24), total }
 }
 
 function regression(points: { x: number; y: number }[]): { slope: number; intercept: number } {
@@ -309,23 +358,27 @@ function regression(points: { x: number; y: number }[]): { slope: number; interc
 }
 
 export function scatter(rows: Row[], xCol: string, yCol: string): ScatterModel | null {
-  const points: { x: number; y: number }[] = []
-  for (const row of rows) {
+  const points: { x: number; y: number; index: number }[] = []
+  for (let index = 0; index < rows.length; index += 1) {
+    const row = rows[index]
     const x = asNumber(row[xCol])
     const y = asNumber(row[yCol])
     if (x == null || y == null) continue
-    points.push({ x, y })
+    points.push({ x, y, index })
   }
   if (points.length < 2) return null
   const fit = regression(points)
   const cap = 5000
+  const step = points.length > cap ? Math.ceil(points.length / cap) : 1
+  const shown = step === 1 ? points : points.filter((_, index) => index % step === 0)
   return {
     xCol,
     yCol,
-    points: points.length > cap ? points.filter((_, index) => index % Math.ceil(points.length / cap) === 0) : points,
+    points: shown,
     slope: fit.slope,
     intercept: fit.intercept,
-    hidden: Math.max(0, points.length - cap),
+    hidden: Math.max(0, points.length - shown.length),
+    total: points.length,
   }
 }
 
