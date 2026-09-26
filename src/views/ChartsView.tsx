@@ -21,11 +21,11 @@ import { themePalette } from '../lib/theme'
 import './ChartsView.css'
 
 const TYPES: { id: ChartType; label: string; signal: string }[] = [
-  { id: 'bar', label: 'Bar', signal: 'Category counts' },
-  { id: 'hist', label: 'Histogram', signal: 'Distribution bins' },
-  { id: 'box', label: 'Box', signal: 'Spread / outliers' },
-  { id: 'scatter', label: 'Scatter', signal: 'Pair relation' },
-  { id: 'corr', label: 'Correlation', signal: 'Matrix links' },
+  { id: 'bar', label: 'Share', signal: 'Arc + density rails' },
+  { id: 'hist', label: 'Density', signal: 'Signal silhouette' },
+  { id: 'box', label: 'Range', signal: 'Tower spread' },
+  { id: 'scatter', label: 'Field', signal: 'Constellation' },
+  { id: 'corr', label: 'Links', signal: 'Pearson matrix' },
 ]
 
 type Props = {
@@ -190,7 +190,7 @@ export function ChartsView({ headers, rows, config, onChange, periodLabel }: Pro
 
       {chart.note && <p className="hint charts-hint-live">{chart.note}</p>}
       {chart.svg && !chart.focus && (
-        <p className="hint charts-hint-live">Tap a bar, bin, group, point, or cell — dive into count, share, and sample jobs.</p>
+        <p className="hint charts-hint-live">Tap an arc, rail, node, tower, star, or cell — lock focus for count, share, and sample jobs.</p>
       )}
     </section>
   )
@@ -287,7 +287,7 @@ function renderChart(args: RenderArgs): { node: ReactNode; svg: boolean; note?: 
         node: (
           <EmptyInstrument
             title="Correlation needs numbers"
-            body="This workbook’s measurements live on the command board as stage response times. Switch to Bar for categories, or open Command for crew clocks."
+            body="This workbook’s measurements live on the command board as stage response times. Switch to Share for categories, or open Command for crew clocks."
           />
         ),
       }
@@ -296,7 +296,7 @@ function renderChart(args: RenderArgs): { node: ReactNode; svg: boolean; note?: 
       svg: true,
       node: <CorrChart model={model} selected={selected} onSelect={onSelect} palette={palette} />,
       focus: corrFocus(model, selected),
-      note: 'Upper triangle only — tap a cell for the pair strength.',
+      note: 'Link matrix — tap a cell for pair strength. Strong |r| glows.',
     }
   }
 
@@ -306,7 +306,7 @@ function renderChart(args: RenderArgs): { node: ReactNode; svg: boolean; note?: 
       node: (
         <EmptyInstrument
           title="No numeric columns on this sheet"
-          body="Use Bar for categories (parish, crew, weather), or the command board for response-time instruments."
+          body="Use Share for categories (parish, crew, weather), or the command board for response-time instruments."
         />
       ),
     }
@@ -321,7 +321,7 @@ function renderChart(args: RenderArgs): { node: ReactNode; svg: boolean; note?: 
       svg: true,
       node: <HistogramChart model={model} selected={selected} onSelect={onSelect} palette={palette} />,
       focus: histFocus(model, rows, headers, selected),
-      note: `Histogram of ${model.column} · ${formatInt(model.total)} values · 30 bins.`,
+      note: `Density signal of ${model.column} · ${formatInt(model.total)} values · tap a node to lock a bin.`,
     }
   }
 
@@ -366,7 +366,7 @@ function renderChart(args: RenderArgs): { node: ReactNode; svg: boolean; note?: 
       node: (
         <EmptyInstrument
           title="No categories to count"
-          body="This sheet has nothing categorical to bar. Try a different sheet, or use Histogram if numbers are present."
+          body="This sheet has nothing categorical for the share instrument. Try a different sheet, or Density if numbers are present."
         />
       ),
     }
@@ -381,8 +381,8 @@ function renderChart(args: RenderArgs): { node: ReactNode; svg: boolean; note?: 
     node: <BarChart model={model} selected={selected} onSelect={onSelect} palette={palette} />,
     focus: barFocus(model, rows, headers, selected),
     note: model.hidden
-      ? `Top 24 of ${formatInt(model.items.length + model.hidden)} values · tap a row to inspect.`
-      : 'Horizontal counts · tap a category to inspect.',
+      ? `Arc shows top ${Math.min(6, model.items.length)}; rails list top 24 of ${formatInt(model.items.length + model.hidden)} · tap to lock.`
+      : 'Arc share for the leaders · density rails for the full ranking · tap to lock focus.',
   }
 }
 

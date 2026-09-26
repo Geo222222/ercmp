@@ -340,6 +340,70 @@
   fill: var(--accent);
 }
 
+.charts-view .hud-kicker {
+  fill: var(--accent);
+  font-family: var(--font-display);
+  font-size: 11px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.charts-view .hud-mega {
+  fill: var(--text);
+  font-family: var(--font-display);
+  font-size: 34px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+
+.charts-view .hud-sub {
+  fill: var(--muted);
+  font-size: 11px;
+  letter-spacing: 0.04em;
+}
+
+.charts-view .hud-rank {
+  fill: var(--faint);
+  font-family: var(--font-display);
+  font-size: 15px;
+  letter-spacing: 0.08em;
+}
+
+.charts-view .hud-rail-label {
+  fill: var(--text);
+  font-family: var(--font-display);
+  font-size: 15px;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+}
+
+.charts-view .hud-rail-label.hot,
+.charts-view .axis-label.hot {
+  fill: var(--accent);
+}
+
+.charts-view .hud-callout {
+  fill: var(--text);
+  font-family: var(--font-display);
+  font-size: 14px;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.04em;
+}
+
+.charts-view .hud-micro {
+  fill: var(--muted);
+  font-size: 10px;
+  letter-spacing: 0.04em;
+}
+
+.charts-view .hud-wedge {
+  transition: opacity 0.2s ease;
+}
+
+.charts-view .density-rail {
+  touch-action: manipulation;
+}
+
 .charts-hint-live {
   display: flex;
   align-items: center;
