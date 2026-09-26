@@ -1,5 +1,5 @@
-import { useEffect, useState } from 'react'
-import type { BoardConfig, CleaningMode, CrewReport, CrewSummaryRow } from '../types'
+import { useEffect, useMemo, useState } from 'react'
+import type { BoardConfig, CleaningMode, CrewReport, CrewSummaryRow, FlagRow } from '../types'
 import { Briefing } from '../components/Briefing'
 import { GroupedBars } from '../components/GroupedBars'
 import { downloadCsv } from '../lib/download'
@@ -18,16 +18,32 @@ type Props = {
   onSelectCrew: (crew: string | null) => void
 }
 
+type Severity = 'critical' | 'high' | 'watch'
+
+function flagSeverity(jobs: number): Severity {
+  if (jobs >= 20) return 'critical'
+  if (jobs >= 8) return 'high'
+  return 'watch'
+}
+
+function severityLabel(severity: Severity): string {
+  if (severity === 'critical') return 'Critical'
+  if (severity === 'high') return 'High'
+  return 'Watch'
+}
+
 export function CommandView({ report, config, mode, onMode, onMinJobs, selectedCrew, onSelectCrew }: Props) {
   const [chartMode, setChartMode] = useState<ChartMode>('stages')
   const [showTable, setShowTable] = useState(false)
+  const [crewQuery, setCrewQuery] = useState('')
   const [palette, setPalette] = useState(() => themePalette())
   const rows = mode === 'cleaned' ? report.cleaned : report.raw
-  const weather = mode === 'cleaned' ? report.weatherCleaned : report.weatherRaw
+  const weatherRows = mode === 'cleaned' ? report.weatherCleaned : report.weatherRaw
   const boardJobs = rows.reduce((sum, row) => sum + row.jobs, 0)
   const fastest = rows[0]
   const slowest = rows[rows.length - 1]
   const maxAvg = Math.max(...rows.map((row) => row.avg), 1)
+  const maxFlag = Math.max(...report.flags.map((flag) => flag.jobs), 1)
 
   useEffect(() => {
     const sync = () => setPalette(themePalette())
@@ -36,6 +52,24 @@ export function CommandView({ report, config, mode, onMode, onMinJobs, selectedC
     observer.observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] })
     return () => observer.disconnect()
   }, [])
+
+  useEffect(() => {
+    if (!selectedCrew) return
+    const node = document.getElementById(`crew-${encodeURIComponent(selectedCrew)}`)
+    node?.scrollIntoView({ block: 'nearest', behavior: 'smooth' })
+  }, [selectedCrew])
+
+  const outliers = useMemo(() => buildOutliers(rows, report.stageLabels), [rows, report.stageLabels])
+
+  const chartRows = useMemo(() => {
+    const q = crewQuery.trim().toLowerCase()
+    if (!q) return rows
+    return rows.filter((row) => row.crew.toLowerCase().includes(q))
+  }, [rows, crewQuery])
+
+  function toggleCrew(crew: string) {
+    onSelectCrew(selectedCrew === crew ? null : crew)
+  }
 
   function download() {
     const headers = [
@@ -60,6 +94,8 @@ export function CommandView({ report, config, mode, onMode, onMinJobs, selectedC
     const suffix = mode === 'raw' ? 'raw_' : ''
     downloadCsv(`crew_comparison_${suffix}${dateStamp()}.csv`, headers, records)
   }
+
+  const selectedRow = selectedCrew ? rows.find((row) => row.crew === selectedCrew) ?? null : null
 
   return (
     <div className="command">
@@ -98,12 +134,16 @@ export function CommandView({ report, config, mode, onMode, onMinJobs, selectedC
           value={fastest ? formatDuration(fastest.avg) : '—'}
           note={fastest ? `${fastest.crew} · ${formatInt(fastest.jobs)} jobs` : 'No crew in view'}
           tone="good"
+          onClick={fastest ? () => toggleCrew(fastest.crew) : undefined}
+          active={fastest != null && selectedCrew === fastest.crew}
         />
         <Kpi
           label="Slowest"
           value={rows.length > 1 && slowest ? formatDuration(slowest.avg) : '—'}
           note={rows.length > 1 && slowest ? `${slowest.crew} · ${formatInt(slowest.jobs)} jobs` : 'Needs at least two crews'}
           tone="bad"
+          onClick={rows.length > 1 && slowest ? () => toggleCrew(slowest.crew) : undefined}
+          active={slowest != null && selectedCrew === slowest.crew}
         />
         <Kpi
           label="Clock flags"
@@ -114,7 +154,15 @@ export function CommandView({ report, config, mode, onMode, onMinJobs, selectedC
       </section>
 
       <div className="board">
-        <Briefing rows={rows} stageLabels={report.stageLabels} counts={report.counts} mode={mode} />
+        <Briefing
+          rows={rows}
+          stageLabels={report.stageLabels}
+          counts={report.counts}
+          mode={mode}
+          flagCount={report.flags.length}
+          selectedCrew={selectedCrew}
+          onSelectCrew={onSelectCrew}
+        />
 
         <section className="panel">
           <div className="panel-head">
@@ -139,7 +187,7 @@ export function CommandView({ report, config, mode, onMode, onMinJobs, selectedC
                   maxAvg={maxAvg}
                   stageLabels={report.stageLabels}
                   selected={selectedCrew === row.crew}
-                  onSelect={() => onSelectCrew(selectedCrew === row.crew ? null : row.crew)}
+                  onSelect={() => toggleCrew(row.crew)}
                   rankFast={palette.rankFast}
                   rankSlow={palette.rankSlow}
                 />
@@ -149,13 +197,14 @@ export function CommandView({ report, config, mode, onMode, onMinJobs, selectedC
           {showTable && rows.length > 0 && <SummaryTable rows={rows} stageLabels={report.stageLabels} />}
         </section>
 
-        <section className="panel">
+        <section className="panel comparison-panel">
           <div className="panel-head">
             <div>
               <p className="kicker">Where the time goes</p>
               <h2>Comparison</h2>
             </div>
           </div>
+
           <div className="seg chart-seg" role="group" aria-label="Chart">
             {(
               [
@@ -170,15 +219,58 @@ export function CommandView({ report, config, mode, onMode, onMinJobs, selectedC
               </button>
             ))}
           </div>
+
+          {chartMode !== 'weather' && rows.length > 0 && (
+            <div className="outlier-strip" aria-label="Outliers">
+              {outliers.map((item) => (
+                <button
+                  key={item.key}
+                  type="button"
+                  className={`outlier-chip ${item.tone}${selectedCrew === item.crew ? ' on' : ''}`}
+                  onClick={() => toggleCrew(item.crew)}
+                >
+                  <span>{item.label}</span>
+                  <strong>{item.crew}</strong>
+                  <em>{item.value}</em>
+                </button>
+              ))}
+            </div>
+          )}
+
+          {chartMode !== 'weather' && rows.length > 0 && (
+            <div className="chart-controls">
+              <label className="crew-search">
+                <span>Find crew</span>
+                <input
+                  type="search"
+                  value={crewQuery}
+                  placeholder="Type a name…"
+                  onChange={(event) => setCrewQuery(event.target.value)}
+                />
+              </label>
+              {selectedCrew && (
+                <button type="button" className="text-btn" onClick={() => onSelectCrew(null)}>
+                  Clear focus
+                </button>
+              )}
+            </div>
+          )}
+
+          {selectedRow && chartMode !== 'weather' && (
+            <FocusCard row={selectedRow} stageLabels={report.stageLabels} onClear={() => onSelectCrew(null)} />
+          )}
+
           <ChartBody
             mode={chartMode}
-            rows={rows}
-            weather={weather}
+            rows={chartRows}
+            weather={weatherRows}
             stageLabels={report.stageLabels}
             weatherCol={config.weatherCol}
             highlight={selectedCrew}
             palette={palette}
+            onSelectCrew={toggleCrew}
           />
+
           {chartMode === 'stages' && (
             <div className="legend">
               {report.stageLabels.map((label, index) => (
@@ -201,42 +293,46 @@ export function CommandView({ report, config, mode, onMode, onMinJobs, selectedC
               </span>
             </div>
           )}
-          {rows.length > 8 && chartMode !== 'weather' && <p className="hint">Swipe the chart sideways to see every crew.</p>}
+          {chartMode !== 'weather' && chartRows.length > 10 && (
+            <p className="hint">Scroll the instrument — tap a bar or outlier chip to focus that crew on the ranking.</p>
+          )}
         </section>
 
-        <section className="panel span-2">
+        <section className="panel span-2 quality-panel">
           <div className="panel-head">
             <div>
               <p className="kicker">Data quality</p>
               <h2>Negative timestamps</h2>
             </div>
+            {report.flags.length > 0 && (
+              <div className="severity-legend" aria-hidden="true">
+                <span className="sev critical">Critical ≥20</span>
+                <span className="sev high">High ≥8</span>
+                <span className="sev watch">Watch</span>
+              </div>
+            )}
           </div>
-          <p className="quality-note">
-            A job is flagged when any stage, or the total, runs more than 15 minutes backward. Crews below have more than
-            two of those jobs in the same month.
+
+          <p className="quality-callout">
+            <strong>Flag rule</strong>
+            <span>
+              Stage or total runs &gt;15 min backward · listed when a crew has &gt;2 of those jobs in one month
+            </span>
           </p>
+
           {report.flags.length === 0 ? (
             <p className="empty">No crew has more than 2 negative-timestamp jobs in any single month.</p>
           ) : (
-            <div className="table-scroll">
-              <table>
-                <thead>
-                  <tr>
-                    <th>Crew</th>
-                    <th>Month</th>
-                    <th>Negative jobs</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {report.flags.map((flag) => (
-                    <tr key={`${flag.crew}-${flag.month}`}>
-                      <td>{flag.crew}</td>
-                      <td>{flag.month}</td>
-                      <td>{formatInt(flag.jobs)}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+            <div className="quality-grid" role="list">
+              {report.flags.map((flag) => (
+                <FlagCard
+                  key={`${flag.crew}-${flag.month}`}
+                  flag={flag}
+                  maxJobs={maxFlag}
+                  selected={selectedCrew === flag.crew}
+                  onSelect={() => toggleCrew(flag.crew)}
+                />
+              ))}
             </div>
           )}
         </section>
@@ -245,14 +341,234 @@ export function CommandView({ report, config, mode, onMode, onMinJobs, selectedC
   )
 }
 
-function Kpi({ label, value, note, tone }: { label: string; value: string; note: string; tone?: 'good' | 'bad' | 'warn' }) {
+function Kpi({
+  label,
+  value,
+  note,
+  tone,
+  onClick,
+  active,
+}: {
+  label: string
+  value: string
+  note: string
+  tone?: 'good' | 'bad' | 'warn'
+  onClick?: () => void
+  active?: boolean
+}) {
+  const className = [tone ? `kpi ${tone}` : 'kpi', onClick ? 'kpi-action' : '', active ? 'on' : '']
+    .filter(Boolean)
+    .join(' ')
+  if (onClick) {
+    return (
+      <button type="button" className={className} onClick={onClick}>
+        <span>{label}</span>
+        <strong>{value}</strong>
+        <small>{note}</small>
+      </button>
+    )
+  }
   return (
-    <article className={tone ? `kpi ${tone}` : 'kpi'}>
+    <article className={className}>
       <span>{label}</span>
       <strong>{value}</strong>
       <small>{note}</small>
     </article>
   )
+}
+
+function FlagCard({
+  flag,
+  maxJobs,
+  selected,
+  onSelect,
+}: {
+  flag: FlagRow
+  maxJobs: number
+  selected: boolean
+  onSelect: () => void
+}) {
+  const severity = flagSeverity(flag.jobs)
+  const width = Math.max(8, (flag.jobs / maxJobs) * 100)
+  return (
+    <button
+      type="button"
+      role="listitem"
+      className={`flag-card ${severity}${selected ? ' on' : ''}`}
+      onClick={onSelect}
+      aria-pressed={selected}
+    >
+      <div className="flag-card-top">
+        <em className={`sev-badge ${severity}`}>{severityLabel(severity)}</em>
+        <strong className="flag-count">{formatInt(flag.jobs)}</strong>
+      </div>
+      <p className="flag-crew">{flag.crew}</p>
+      <p className="flag-month">{flag.month}</p>
+      <span className="flag-track" aria-hidden="true">
+        <span className={`flag-fill ${severity}`} style={{ width: `${width}%` }} />
+      </span>
+      <span className="flag-action">{selected ? 'Focused on board' : 'Tap to focus crew'}</span>
+    </button>
+  )
+}
+
+function FocusCard({
+  row,
+  stageLabels,
+  onClear,
+}: {
+  row: CrewSummaryRow
+  stageLabels: string[]
+  onClear: () => void
+}) {
+  const skewed = row.jobs >= 5 && row.median > 0 && row.avg > row.median * 1.4
+  const skewRatio = row.median > 0 ? row.avg / row.median : 0
+  let bottleneck = 0
+  let bottleneckVal = -Infinity
+  row.stageAvgs.forEach((value, index) => {
+    if (value > bottleneckVal) {
+      bottleneckVal = value
+      bottleneck = index
+    }
+  })
+  const maxStage = Math.max(...row.stageAvgs, 1)
+
+  return (
+    <div className="focus-card">
+      <div className="focus-card-head">
+        <div>
+          <p className="insight-label">Crew focus</p>
+          <p className="insight-title">{row.crew}</p>
+        </div>
+        <button type="button" className="text-btn" onClick={onClear}>
+          Clear
+        </button>
+      </div>
+      <div className="metric-row">
+        <div className="metric-chip">
+          <span>Avg</span>
+          <strong>{formatDuration(row.avg)}</strong>
+        </div>
+        <div className="metric-chip">
+          <span>Median</span>
+          <strong>{formatDuration(row.median)}</strong>
+        </div>
+        <div className="metric-chip">
+          <span>Jobs</span>
+          <strong>{formatInt(row.jobs)}</strong>
+        </div>
+        {skewed && (
+          <div className="metric-chip warn-chip">
+            <span>Skew</span>
+            <strong>{skewRatio.toFixed(1)}× med</strong>
+          </div>
+        )}
+      </div>
+      {stageLabels.length > 0 && (
+        <div className="focus-stages">
+          <p className="insight-label">
+            Stage split · heaviest {shortStage(stageLabels[bottleneck])}
+          </p>
+          {stageLabels.map((label, index) => (
+            <div key={label} className="focus-stage-row">
+              <span>{shortStage(label)}</span>
+              <span className="flag-track">
+                <span
+                  className="flag-fill stage"
+                  style={{ width: `${Math.max(4, (row.stageAvgs[index] / maxStage) * 100)}%` }}
+                />
+              </span>
+              <strong>{row.stageAvgs[index].toFixed(1)}m</strong>
+            </div>
+          ))}
+        </div>
+      )}
+      {skewed && (
+        <p className="focus-callout">Long-job skew — average pulled up by a long tail past the median.</p>
+      )}
+      {row.jobs < 20 && (
+        <p className="focus-callout">Thin sample — fewer than 20 jobs; treat rank as indicative.</p>
+      )}
+    </div>
+  )
+}
+
+type Outlier = {
+  key: string
+  label: string
+  crew: string
+  value: string
+  tone: 'good' | 'bad' | 'warn' | 'neutral'
+}
+
+function buildOutliers(rows: CrewSummaryRow[], stageLabels: string[]): Outlier[] {
+  if (rows.length === 0) return []
+  const fastest = rows[0]
+  const slowest = rows[rows.length - 1]
+  const items: Outlier[] = [
+    {
+      key: 'fast',
+      label: 'Fastest',
+      crew: fastest.crew,
+      value: formatDuration(fastest.avg),
+      tone: 'good',
+    },
+  ]
+  if (rows.length > 1) {
+    items.push({
+      key: 'slow',
+      label: 'Slowest',
+      crew: slowest.crew,
+      value: formatDuration(slowest.avg),
+      tone: 'bad',
+    })
+  }
+
+  let skewCrew = fastest
+  let skewGap = -Infinity
+  for (const row of rows) {
+    if (row.jobs < 5 || row.median <= 0) continue
+    const gap = row.avg - row.median
+    if (gap > skewGap) {
+      skewGap = gap
+      skewCrew = row
+    }
+  }
+  if (skewGap > 0 && skewCrew.median > 0) {
+    items.push({
+      key: 'skew',
+      label: 'Biggest skew',
+      crew: skewCrew.crew,
+      value: `avg ${formatDuration(skewCrew.avg)} · med ${formatDuration(skewCrew.median)}`,
+      tone: 'warn',
+    })
+  }
+
+  if (stageLabels.length > 0 && rows.length > 0) {
+    let stageIndex = 0
+    let stageCrew = rows[0]
+    let stageVal = -Infinity
+    for (const row of rows) {
+      row.stageAvgs.forEach((value, index) => {
+        if (value > stageVal) {
+          stageVal = value
+          stageIndex = index
+          stageCrew = row
+        }
+      })
+    }
+    if (stageVal > 0) {
+      items.push({
+        key: 'stage',
+        label: `Bottleneck · ${shortStage(stageLabels[stageIndex])}`,
+        crew: stageCrew.crew,
+        value: `${stageVal.toFixed(1)}m`,
+        tone: 'neutral',
+      })
+    }
+  }
+
+  return items
 }
 
 function CrewRow({
@@ -279,7 +595,7 @@ function CrewRow({
   const thin = row.jobs < 20
   const skewed = row.jobs >= 5 && row.median > 0 && row.avg > row.median * 1.4
   return (
-    <div className={selected ? 'crew-block open' : 'crew-block'}>
+    <div className={selected ? 'crew-block open' : 'crew-block'} id={`crew-${encodeURIComponent(row.crew)}`}>
       <button type="button" className="crew-row" onClick={onSelect}>
         <em>{String(index + 1).padStart(2, '0')}</em>
         <div>
@@ -387,6 +703,7 @@ function ChartBody({
   weatherCol,
   highlight,
   palette,
+  onSelectCrew,
 }: {
   mode: ChartMode
   rows: CrewSummaryRow[]
@@ -395,6 +712,7 @@ function ChartBody({
   weatherCol: string
   highlight: string | null
   palette: ReturnType<typeof themePalette>
+  onSelectCrew: (crew: string) => void
 }) {
   if (mode === 'weather') {
     if (weatherCol === 'none') return <p className="empty">Pick a breakdown column in Filters. Weather Condition is the usual one.</p>
@@ -403,16 +721,18 @@ function ChartBody({
       <GroupedBars
         categories={weather.map((item) => displayValue(item.label))}
         series={[{ name: 'Average', color: palette.weather, values: weather.map((item) => item.avg) }]}
+        selectable={false}
       />
     )
   }
-  if (rows.length === 0) return <p className="empty">No crews to chart.</p>
+  if (rows.length === 0) return <p className="empty">No crews match this search.</p>
   const categories = rows.map((row) => row.crew)
   if (mode === 'total') {
     return (
       <GroupedBars
         categories={categories}
         highlight={highlight}
+        onSelect={onSelectCrew}
         series={[{ name: 'Average', color: palette.avg, values: rows.map((row) => row.avg) }]}
       />
     )
@@ -422,6 +742,7 @@ function ChartBody({
       <GroupedBars
         categories={categories}
         highlight={highlight}
+        onSelect={onSelectCrew}
         series={[
           { name: 'Average', color: palette.avg, values: rows.map((row) => row.avg) },
           { name: 'Median', color: palette.median, values: rows.map((row) => row.median) },
@@ -433,6 +754,7 @@ function ChartBody({
     <GroupedBars
       categories={categories}
       highlight={highlight}
+      onSelect={onSelectCrew}
       series={stageLabels.map((label, index) => ({
         name: shortStage(label),
         color: palette.stages[index % palette.stages.length],

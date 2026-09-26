@@ -6,6 +6,9 @@ type Props = {
   stageLabels: string[]
   counts: CrewCounts
   mode: CleaningMode
+  flagCount?: number
+  selectedCrew?: string | null
+  onSelectCrew?: (crew: string | null) => void
 }
 
 type Insight = {
@@ -14,12 +17,26 @@ type Insight = {
   label: string
   title: string
   copy: string
+  crew?: string
   metrics?: { label: string; value: string }[]
 }
 
-export function Briefing({ rows, stageLabels, counts, mode }: Props) {
-  const insights = buildInsights(rows, stageLabels)
+export function Briefing({
+  rows,
+  stageLabels,
+  counts,
+  mode,
+  flagCount = 0,
+  selectedCrew = null,
+  onSelectCrew,
+}: Props) {
+  const insights = buildInsights(rows, stageLabels, flagCount)
   const account = buildAccounting(counts, mode)
+
+  function activate(insight: Insight) {
+    if (!onSelectCrew || !insight.crew) return
+    onSelectCrew(selectedCrew === insight.crew ? null : insight.crew)
+  }
 
   return (
     <section className="panel briefing span-2">
@@ -29,7 +46,9 @@ export function Briefing({ rows, stageLabels, counts, mode }: Props) {
           <h2>Situation</h2>
         </div>
         <p className="insight-copy">
-          {rows.length === 0 ? 'No crews in view' : `${formatInt(rows.length)} crews ranked · ${mode === 'cleaned' ? 'field-cleaned' : 'raw clocks'}`}
+          {rows.length === 0
+            ? 'No crews in view'
+            : `${formatInt(rows.length)} crews ranked · ${mode === 'cleaned' ? 'field-cleaned' : 'raw clocks'}`}
         </p>
       </div>
 
@@ -43,23 +62,49 @@ export function Briefing({ rows, stageLabels, counts, mode }: Props) {
         </div>
       ) : (
         <div className="insight-grid">
-          {insights.map((insight) => (
-            <article key={insight.key} className={`insight ${insight.tone}`}>
-              <p className="insight-label">{insight.label}</p>
-              <p className="insight-title">{insight.title}</p>
-              <p className="insight-copy">{insight.copy}</p>
-              {insight.metrics && insight.metrics.length > 0 && (
-                <div className="metric-row">
-                  {insight.metrics.map((metric) => (
-                    <div key={metric.label} className="metric-chip">
-                      <span>{metric.label}</span>
-                      <strong>{metric.value}</strong>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </article>
-          ))}
+          {insights.map((insight) => {
+            const actionable = Boolean(insight.crew && onSelectCrew)
+            const active = insight.crew != null && selectedCrew === insight.crew
+            const className = `insight ${insight.tone}${actionable ? ' insight-action' : ''}${active ? ' on' : ''}`
+            const body = (
+              <>
+                <p className="insight-label">{insight.label}</p>
+                <p className="insight-title">{insight.title}</p>
+                <p className="insight-copy">{insight.copy}</p>
+                {insight.metrics && insight.metrics.length > 0 && (
+                  <div className="metric-row">
+                    {insight.metrics.map((metric) => (
+                      <div key={metric.label} className="metric-chip">
+                        <span>{metric.label}</span>
+                        <strong>{metric.value}</strong>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                {actionable && (
+                  <span className="insight-hint">{active ? 'Focused' : 'Tap to focus'}</span>
+                )}
+              </>
+            )
+            if (actionable) {
+              return (
+                <button
+                  key={insight.key}
+                  type="button"
+                  className={className}
+                  onClick={() => activate(insight)}
+                  aria-pressed={active}
+                >
+                  {body}
+                </button>
+              )
+            }
+            return (
+              <article key={insight.key} className={className}>
+                {body}
+              </article>
+            )
+          })}
         </div>
       )}
 
@@ -79,7 +124,7 @@ export function Briefing({ rows, stageLabels, counts, mode }: Props) {
   )
 }
 
-function buildInsights(rows: CrewSummaryRow[], stageLabels: string[]): Insight[] {
+function buildInsights(rows: CrewSummaryRow[], stageLabels: string[], flagCount: number): Insight[] {
   if (rows.length === 0) return []
 
   const fastest = rows[0]
@@ -90,6 +135,7 @@ function buildInsights(rows: CrewSummaryRow[], stageLabels: string[]): Insight[]
       tone: 'good',
       label: 'Fastest',
       title: fastest.crew,
+      crew: fastest.crew,
       copy: 'Lowest average total time in the current comparison.',
       metrics: [
         { label: 'Avg', value: `${fastest.avg.toFixed(1)} min` },
@@ -106,6 +152,7 @@ function buildInsights(rows: CrewSummaryRow[], stageLabels: string[]): Insight[]
       tone: 'bad',
       label: 'Slowest',
       title: slowest.crew,
+      crew: slowest.crew,
       copy: ratio > 0 ? `${ratio.toFixed(1)}× slower than ${fastest.crew}.` : 'Highest average total time on this board.',
       metrics: [
         { label: 'Avg', value: `${slowest.avg.toFixed(1)} min` },
@@ -129,7 +176,8 @@ function buildInsights(rows: CrewSummaryRow[], stageLabels: string[]): Insight[]
         tone: 'neutral',
         label: 'Bottleneck stage',
         title: shortStage(stageLabels[gapIndex]),
-        copy: `Largest gap between ${slowest.crew} and ${fastest.crew}.`,
+        crew: slowest.crew,
+        copy: `Largest gap between ${slowest.crew} and ${fastest.crew} — tap to focus the slower crew.`,
         metrics: [
           { label: 'Slowest', value: `${slowest.stageAvgs[gapIndex].toFixed(1)} min` },
           { label: 'Fastest', value: `${fastest.stageAvgs[gapIndex].toFixed(1)} min` },
@@ -150,11 +198,23 @@ function buildInsights(rows: CrewSummaryRow[], stageLabels: string[]): Insight[]
       tone: 'warn',
       label: 'Thin samples',
       title: names,
+      crew: thin.length === 1 ? thin[0].crew : undefined,
       copy:
         thin.length > 4
           ? 'Fewer than 20 jobs each — treat rankings as indicative. Prefer 20+ for a steadier board.'
           : 'Fewer than 20 jobs in this comparison — treat ranking as indicative rather than conclusive.',
       metrics: [{ label: 'Crews', value: formatInt(thin.length) }],
+    })
+  }
+
+  if (flagCount > 0) {
+    insights.push({
+      key: 'clocks',
+      tone: 'warn',
+      label: 'Clock quality',
+      title: `${formatInt(flagCount)} crew-months flagged`,
+      copy: 'Repeated backward stamps — open Negative timestamps below and tap a flag to focus that crew.',
+      metrics: [{ label: 'Flags', value: formatInt(flagCount) }],
     })
   }
 
