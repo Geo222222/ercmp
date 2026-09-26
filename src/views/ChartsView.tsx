@@ -18,6 +18,7 @@ import { asNumber, asText, categoricalColumns, numericColumns } from '../lib/row
 import { dateStamp, displayValue, formatInt } from '../lib/format'
 import { downloadSvgAsPng } from '../lib/download'
 import { themePalette } from '../lib/theme'
+import { LabelHint } from '../components/Hint'
 import './ChartsView.css'
 
 const TYPES: { id: ChartType; label: string; signal: string }[] = [
@@ -118,6 +119,15 @@ export function ChartsView({ headers, rows, config, onChange, periodLabel }: Pro
       </div>
 
       <div className="charts-controls">
+        <div className="charts-mode-head">
+          <LabelHint tip="chartsShare" label="About Share mode">
+            Share
+          </LabelHint>
+          <span className="tip-sep">·</span>
+          <LabelHint tip="chartsDensity" label="About Density mode">
+            Density
+          </LabelHint>
+        </div>
         <div className="seg chart-seg" role="group" aria-label="Chart type">
           {TYPES.map((type) => (
             <button

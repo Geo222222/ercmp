@@ -44,7 +44,7 @@
   width: 100%;
 }
 
-.roster-toolbar {
+.roster-smart {
   display: grid;
   gap: var(--space-3);
   padding: var(--space-3);
@@ -55,20 +55,84 @@
     var(--bg-elevated);
 }
 
-.roster-control {
+.roster-smart-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: var(--space-3);
+}
+
+.roster-smart-purpose {
+  margin: 4px 0 0;
+  color: var(--muted);
+  font-size: 14px;
+}
+
+.roster-clear {
+  min-height: var(--touch);
+  padding: 0 14px;
+  border-radius: var(--radius);
+  border: 1px solid var(--line-strong);
+  background: var(--input-bg);
+  color: inherit;
+  font-family: var(--font-display);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  font-size: 12px;
+  flex-shrink: 0;
+}
+
+.roster-active-summary {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 8px 12px;
+  margin: 0;
+  padding: 10px 12px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--line);
+  background: var(--panel);
+  font-size: 14px;
+}
+
+.roster-active-label {
+  font-family: var(--font-display);
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--faint);
+}
+
+.roster-active-summary strong {
+  font-weight: 600;
+  min-width: 0;
+}
+
+.roster-active-summary em {
+  font-style: normal;
+  margin-left: auto;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+  font-family: var(--font-display);
+}
+
+.roster-smart-grid {
+  display: grid;
+  gap: var(--space-3);
+}
+
+.roster-field {
+  position: relative;
   display: grid;
   gap: 8px;
   min-width: 0;
 }
 
-.roster-control-head {
+.roster-field-label {
   display: flex;
   justify-content: space-between;
   align-items: center;
   gap: var(--space-2);
-}
-
-.roster-control-head span {
   color: var(--muted);
   font-family: var(--font-display);
   font-size: 12px;
@@ -89,42 +153,138 @@
   cursor: pointer;
 }
 
-.roster-text-btn:disabled {
-  color: var(--faint);
-  cursor: default;
-}
-
-.roster-crew-search input,
+.roster-picker-trigger,
 .roster-sort select {
   width: 100%;
   min-height: var(--touch);
-  padding: var(--space-2) var(--space-3);
+  padding: 0 var(--space-3);
   border-radius: var(--radius);
   border: 1px solid var(--line-strong);
   background: var(--input-bg);
   color: inherit;
   font: inherit;
+  text-align: left;
+  cursor: pointer;
 }
 
-.roster-selected-chips,
-.roster-chip-scroll {
+.roster-picker-trigger {
   display: flex;
-  flex-wrap: nowrap;
+  justify-content: space-between;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.roster-picker-trigger span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.roster-picker-trigger em {
+  font-style: normal;
+  color: var(--muted);
+  flex-shrink: 0;
+}
+
+.roster-picker-trigger.on {
+  border-color: var(--accent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 35%, transparent);
+}
+
+.roster-picker-panel {
+  position: absolute;
+  z-index: 30;
+  top: calc(100% + 4px);
+  left: 0;
+  right: 0;
+  display: grid;
   gap: 8px;
-  overflow-x: auto;
+  padding: 10px;
+  border-radius: var(--radius);
+  border: 1px solid var(--line-strong);
+  background: var(--panel);
+  box-shadow: var(--shadow);
+}
+
+.roster-picker-panel input[type='search'] {
+  width: 100%;
+  min-height: 40px;
+  padding: 0 12px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--line-strong);
+  background: var(--input-bg);
+  color: inherit;
+}
+
+.roster-picker-list {
+  max-height: min(42vh, 280px);
+  overflow: auto;
   -webkit-overflow-scrolling: touch;
-  padding-bottom: 2px;
-  scrollbar-width: thin;
+  display: grid;
+  gap: 4px;
+  padding-right: 2px;
+  scrollbar-width: auto;
+  scrollbar-color: var(--accent) var(--bar-track);
+}
+
+.roster-picker-list::-webkit-scrollbar {
+  width: 10px;
+}
+
+.roster-picker-list::-webkit-scrollbar-thumb {
+  background: color-mix(in srgb, var(--accent) 55%, var(--line-strong));
+  border-radius: 99px;
+}
+
+.roster-pick {
+  display: grid;
+  grid-template-columns: 18px minmax(0, 1fr);
+  gap: 10px;
+  align-items: center;
+  min-height: 44px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.roster-pick i {
+  width: 16px;
+  height: 16px;
+  border-radius: 4px;
+  border: 1px solid var(--line-strong);
+  background: var(--input-bg);
+}
+
+.roster-pick.on {
+  background: var(--accent-soft);
+}
+
+.roster-pick.on i {
+  background: var(--accent);
+  border-color: var(--accent);
+  box-shadow: inset 0 0 0 2px var(--panel);
+}
+
+.roster-pick span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .roster-selected-chips {
+  display: flex;
   flex-wrap: wrap;
+  gap: 8px;
 }
 
 .filter-chip {
   flex: 0 0 auto;
-  min-height: 40px;
-  padding: 0 14px;
+  min-height: 36px;
+  padding: 0 12px;
   border-radius: var(--radius-sm);
   border: 1px solid var(--line-strong);
   background: var(--input-bg);
@@ -139,7 +299,6 @@
 .filter-chip.on {
   background: var(--accent-soft);
   border-color: var(--accent);
-  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 35%, transparent);
 }
 
 .filter-chip span {
@@ -154,13 +313,9 @@
   padding: 8px 0;
 }
 
-.roster-sort-control {
-  align-content: start;
-}
-
 @media (min-width: 900px) {
-  .roster-toolbar {
-    grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr) minmax(180px, 0.7fr);
+  .roster-smart-grid {
+    grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr) minmax(180px, 0.75fr);
     align-items: start;
   }
 }

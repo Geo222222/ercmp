@@ -7,6 +7,7 @@ import { downloadCsv } from '../lib/download'
 import { dateStamp, displayValue, formatDuration, formatInt, shortStage } from '../lib/format'
 import { monthTone, rangeNote } from '../lib/excel'
 import { themePalette } from '../lib/theme'
+import { Hint, LabelHint } from '../components/Hint'
 
 type ChartMode = 'stages' | 'avg' | 'total' | 'weather'
 
@@ -137,24 +138,42 @@ export function CommandView({
       />
 
       <div className="toolbar">
-        <div className="modes" role="group" aria-label="Cleaning mode">
-          <button type="button" className={mode === 'cleaned' ? 'mode on' : 'mode'} onClick={() => onMode('cleaned')}>
-            <span>Field-cleaned</span>
-            <strong>{formatInt(report.counts.cleaned)}</strong>
-            <small>batch stamps removed</small>
-          </button>
-          <button type="button" className={mode === 'raw' ? 'mode on' : 'mode'} onClick={() => onMode('raw')}>
-            <span>Raw clocks</span>
-            <strong>{formatInt(report.counts.raw)}</strong>
-            <small>only negative totals removed</small>
-          </button>
-        </div>
-        <div className="seg" role="group" aria-label="Minimum jobs">
-          {[1, 10, 20, 50].map((value) => (
-            <button key={value} type="button" aria-pressed={config.minJobs === value} onClick={() => onMinJobs(value)}>
-              {value === 1 ? 'Min 1' : `${value}+`}
+        <div className="modes-block">
+          <p className="toolbar-tip-row">
+            <LabelHint tip="fieldCleaned" label="About field-cleaned mode">
+              Field-cleaned
+            </LabelHint>
+            <span className="tip-sep">·</span>
+            <LabelHint tip="rawClocks" label="About raw clocks mode">
+              Raw clocks
+            </LabelHint>
+          </p>
+          <div className="modes" role="group" aria-label="Cleaning mode">
+            <button type="button" className={mode === 'cleaned' ? 'mode on' : 'mode'} onClick={() => onMode('cleaned')}>
+              <span>Field-cleaned</span>
+              <strong>{formatInt(report.counts.cleaned)}</strong>
+              <small>batch stamps removed</small>
             </button>
-          ))}
+            <button type="button" className={mode === 'raw' ? 'mode on' : 'mode'} onClick={() => onMode('raw')}>
+              <span>Raw clocks</span>
+              <strong>{formatInt(report.counts.raw)}</strong>
+              <small>only negative totals removed</small>
+            </button>
+          </div>
+        </div>
+        <div className="seg-block">
+          <p className="toolbar-tip-row">
+            <LabelHint tip="minJobs" label="About minimum jobs">
+              Minimum jobs
+            </LabelHint>
+          </p>
+          <div className="seg" role="group" aria-label="Minimum jobs">
+            {[1, 10, 20, 50].map((value) => (
+              <button key={value} type="button" aria-pressed={config.minJobs === value} onClick={() => onMinJobs(value)}>
+                {value === 1 ? 'Min 1' : `${value}+`}
+              </button>
+            ))}
+          </div>
         </div>
         <button type="button" className="ghost" onClick={download} disabled={rows.length === 0}>
           Download CSV
@@ -260,6 +279,13 @@ export function CommandView({
               </button>
             ))}
           </div>
+          {chartMode === 'avg' && (
+            <p className="toolbar-tip-row" style={{ marginTop: 4 }}>
+              <LabelHint tip="avgVsMedian" label="About average vs median">
+                Why avg vs median
+              </LabelHint>
+            </p>
+          )}
 
           {chartMode !== 'weather' && rows.length > 0 && (
             <div className="outlier-strip" aria-label="Outliers">
@@ -342,7 +368,11 @@ export function CommandView({
         <section className="panel span-2 quality-panel">
           <div className="panel-head">
             <div>
-              <p className="kicker">Data quality</p>
+              <p className="kicker">
+                <LabelHint tip="qualityFlags" label="About data-quality flags">
+                  Data quality
+                </LabelHint>
+              </p>
               <h2>Negative timestamps</h2>
             </div>
             {report.flags.length > 0 && (
@@ -355,7 +385,9 @@ export function CommandView({
           </div>
 
           <p className="quality-callout">
-            <strong>Flag rule</strong>
+            <strong>
+              Flag rule <Hint tip="negativeRule" label="About the −15 minute rule" />
+            </strong>
             <span>
               Stage or total runs &gt;15 min backward · listed when a crew has &gt;2 of those jobs in one month
             </span>

@@ -3,6 +3,7 @@ import type { BoardConfig, MonthDataset, Row } from '../types'
 import { displayValue, formatInt } from '../lib/format'
 import { rangeNote } from '../lib/excel'
 import { valueCounts } from '../lib/rows'
+import { LabelHint } from './Hint'
 
 type Props = {
   headers: string[]
@@ -140,7 +141,11 @@ export function FilterDrawer(props: Props) {
           )}
 
           <label className="field">
-            <span>Header row</span>
+            <span>
+              <LabelHint tip="headerRow" label="About header row">
+                Header row
+              </LabelHint>
+            </span>
             <input
               type="number"
               min={1}
@@ -152,7 +157,11 @@ export function FilterDrawer(props: Props) {
           </label>
 
           <label className="field">
-            <span>Filter column</span>
+            <span>
+              <LabelHint tip="globalFilter" label="About board filters">
+                Filter column
+              </LabelHint>
+            </span>
             <select
               value={config.globalFilterCol}
               onChange={(event) => onChange({ globalFilterCol: event.target.value, globalFilterVals: [] })}
@@ -199,8 +208,22 @@ export function FilterDrawer(props: Props) {
           )}
 
           <section className="field">
-            <span>Timestamp order</span>
-            <p className="hint">Earliest stage at the top, completion at the bottom. The first gap is allowed to be short. Later gaps under 4 minutes are treated as batch stamps in the field-cleaned view.</p>
+            <span>
+              <LabelHint tip="stageOrder" label="About timestamp order">
+                Timestamp order
+              </LabelHint>
+            </span>
+            <p className="hint">
+              Earliest stage at the top, completion at the bottom.{' '}
+              <LabelHint tip="batchStamp" label="About the 4-minute batch rule">
+                Batch rule
+              </LabelHint>{' '}
+              and{' '}
+              <LabelHint tip="negativeRule" label="About the −15 minute rule">
+                −15 min rule
+              </LabelHint>{' '}
+              apply in field-cleaned mode.
+            </p>
             <ol className="stage-list">
               {config.stageCols.map((column, index) => (
                 <li key={column}>
@@ -264,7 +287,11 @@ export function FilterDrawer(props: Props) {
           />
 
           <label className="field">
-            <span>Minimum jobs per crew</span>
+            <span>
+              <LabelHint tip="minJobs" label="About minimum jobs">
+                Minimum jobs per crew
+              </LabelHint>
+            </span>
             <input
               type="number"
               min={1}

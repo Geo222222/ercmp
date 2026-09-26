@@ -1,6 +1,7 @@
 import { useRef, useState, type DragEvent } from 'react'
 import type { MonthDataset } from '../types'
 import { monthTone, rangeNote } from '../lib/excel'
+import { LabelHint } from './Hint'
 
 type Props = {
   months: MonthDataset[]
@@ -95,7 +96,11 @@ export function MonthRail({
       {months.length > 0 ? (
         <>
           <div className="month-chip-head">
-            <p className="kicker">Active periods</p>
+            <p className="kicker">
+              <LabelHint tip="monthRail" label="About the month rail">
+                Active periods
+              </LabelHint>
+            </p>
             <span>
               {activeCount} of {months.length} in comparison
               {activeCount > 1 ? ' · side-by-side below' : ''}

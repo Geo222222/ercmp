@@ -1,7 +1,8 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import type { Cell, Row } from '../types'
 import { minutesBetween, parseFlexibleDatetime } from '../lib/datetime'
 import { displayValue, formatDuration, formatInt, shortEndpoint } from '../lib/format'
+import { LabelHint } from '../components/Hint'
 import './RosterView.css'
 
 /**
@@ -147,8 +148,12 @@ export function RosterView({ headers, rows, stageCols, crewCol, parishCol, month
   const [crewFilter, setCrewFilter] = useState<string[]>([])
   const [parishFilter, setParishFilter] = useState<string[]>([])
   const [crewNeedle, setCrewNeedle] = useState('')
+  const [crewOpen, setCrewOpen] = useState(false)
+  const [parishOpen, setParishOpen] = useState(false)
   const [sortMode, setSortMode] = useState<SortMode>('crew-asc')
   const [selectedKey, setSelectedKey] = useState<string | null>(null)
+  const crewPickerRef = useRef<HTMLDivElement>(null)
+  const parishPickerRef = useRef<HTMLDivElement>(null)
 
   const resolved = useMemo(() => {
     const stages = stageCols && stageCols.length >= 2 ? stageCols : detectStages(headers)
@@ -306,7 +311,45 @@ export function RosterView({ headers, rows, stageCols, crewCol, parishCol, month
     return crewsPresent.filter((crew) => crew.toLowerCase().includes(needle))
   }, [crewsPresent, crewNeedle])
 
+  const sortLabel = sortOptions.find((option) => option.value === sortMode)?.label ?? 'Crew A–Z'
+
+  const activeSummary = useMemo(() => {
+    const parts: string[] = []
+    if (crewFilter.length === 1) parts.push(crewFilter[0])
+    else if (crewFilter.length > 1) parts.push(`${crewFilter.length} crews`)
+    if (parishFilter.length === 1) parts.push(parishFilter[0])
+    else if (parishFilter.length > 1) parts.push(`${parishFilter.length} parishes`)
+    if (monthFilter) parts.push(monthFilter)
+    if (query.trim()) parts.push(`search “${query.trim()}”`)
+    parts.push(sortLabel)
+    return parts.join(' · ')
+  }, [crewFilter, parishFilter, monthFilter, query, sortLabel])
+
   const filtersActive = crewFilter.length > 0 || parishFilter.length > 0 || Boolean(query) || Boolean(monthFilter)
+
+  useEffect(() => {
+    if (!crewOpen && !parishOpen) return
+    const onPointer = (event: MouseEvent | TouchEvent) => {
+      const target = event.target
+      if (!(target instanceof Node)) return
+      if (crewOpen && crewPickerRef.current && !crewPickerRef.current.contains(target)) setCrewOpen(false)
+      if (parishOpen && parishPickerRef.current && !parishPickerRef.current.contains(target)) setParishOpen(false)
+    }
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setCrewOpen(false)
+        setParishOpen(false)
+      }
+    }
+    document.addEventListener('mousedown', onPointer)
+    document.addEventListener('touchstart', onPointer)
+    document.addEventListener('keydown', onKey)
+    return () => {
+      document.removeEventListener('mousedown', onPointer)
+      document.removeEventListener('touchstart', onPointer)
+      document.removeEventListener('keydown', onKey)
+    }
+  }, [crewOpen, parishOpen])
 
   function toggleCrew(crew: string) {
     setCrewFilter((prev) => (prev.includes(crew) ? prev.filter((item) => item !== crew) : [...prev, crew]))
@@ -323,6 +366,7 @@ export function RosterView({ headers, rows, stageCols, crewCol, parishCol, month
     setParishFilter([])
     setCrewNeedle('')
     setQuery('')
+    setMonthFilter(null)
     setPage(0)
   }
 
@@ -333,14 +377,14 @@ export function RosterView({ headers, rows, stageCols, crewCol, parishCol, month
           <div>
             <p className="kicker">Roster</p>
             <h2>Job instrument</h2>
-            <p className="roster-lede">Filter crews, sort the board, open a job and read the clock trail.</p>
+            <p className="roster-lede">Open a job and read the clock trail — use the smart list below to cut the board first.</p>
           </div>
           <label className="roster-search">
             <span className="visually-hidden">Search jobs</span>
             <input
               type="search"
               value={query}
-              placeholder="Search jobs, crews, feeders, notes"
+              placeholder="Search jobs, feeders, notes"
               onChange={(event) => {
                 setQuery(event.target.value)
                 setPage(0)
@@ -349,124 +393,208 @@ export function RosterView({ headers, rows, stageCols, crewCol, parishCol, month
           </label>
         </div>
 
-        <div className="roster-toolbar" aria-label="Roster smart list controls">
-          <div className="roster-control roster-crew-control">
-            <div className="roster-control-head">
-              <span>Crew</span>
-              <button
-                type="button"
-                className="roster-text-btn"
-                disabled={crewFilter.length === 0}
-                onClick={() => {
-                  setCrewFilter([])
-                  setPage(0)
-                }}
-              >
-                All crews
+        <div className="roster-smart" aria-label="Roster smart list controls">
+          <div className="roster-smart-head">
+            <div>
+              <p className="kicker">
+                <LabelHint tip="rosterSmart" label="About the smart list">
+                  Smart list
+                </LabelHint>
+              </p>
+              <p className="roster-smart-purpose">Narrow the job list by crew/parish, then sort.</p>
+            </div>
+            {filtersActive && (
+              <button type="button" className="roster-clear" onClick={clearSmartFilters}>
+                Clear filters
               </button>
-            </div>
-            <label className="roster-crew-search">
-              <span className="visually-hidden">Find crew</span>
-              <input
-                type="search"
-                value={crewNeedle}
-                placeholder={crewsPresent.length ? `Find among ${crewsPresent.length} crews` : 'No crews in view'}
-                onChange={(event) => setCrewNeedle(event.target.value)}
-                disabled={crewsPresent.length === 0}
-              />
-            </label>
-            {crewFilter.length > 0 && (
-              <div className="roster-selected-chips" aria-label="Selected crews">
-                {crewFilter.map((crew) => (
-                  <button key={crew} type="button" className="filter-chip on" onClick={() => toggleCrew(crew)}>
-                    {crew}
-                    <span aria-hidden="true">×</span>
-                  </button>
-                ))}
-              </div>
             )}
-            <div className="roster-chip-scroll" role="group" aria-label="Crew filter">
-              {crewChoices.length === 0 ? (
-                <p className="roster-chip-empty">{crewNeedle ? 'No crew matches' : 'No crews in this set'}</p>
-              ) : (
-                crewChoices.map((crew) => {
-                  const on = crewFilter.includes(crew)
-                  return (
-                    <button
-                      key={crew}
-                      type="button"
-                      className={on ? 'filter-chip on' : 'filter-chip'}
-                      aria-pressed={on}
-                      onClick={() => toggleCrew(crew)}
-                    >
-                      {crew}
-                    </button>
-                  )
-                })
-              )}
-            </div>
           </div>
 
-          {parishesPresent.length > 0 && (
-            <div className="roster-control">
-              <div className="roster-control-head">
-                <span>Parish</span>
+          <p className="roster-active-summary" aria-live="polite">
+            <span className="roster-active-label">Showing</span>
+            <strong>{activeSummary}</strong>
+            <em>
+              {formatInt(filtered.length)} job{filtered.length === 1 ? '' : 's'}
+            </em>
+          </p>
+
+          <div className="roster-smart-grid">
+            <div className="roster-field" ref={crewPickerRef}>
+              <div className="roster-field-label">
+                <LabelHint tip="rosterCrew" label="About crew filter">
+                  Crew
+                </LabelHint>
+                {crewFilter.length > 0 && (
+                  <button
+                    type="button"
+                    className="roster-text-btn"
+                    onClick={() => {
+                      setCrewFilter([])
+                      setPage(0)
+                    }}
+                  >
+                    All crews
+                  </button>
+                )}
+              </div>
+              <button
+                type="button"
+                className={crewOpen ? 'roster-picker-trigger on' : 'roster-picker-trigger'}
+                aria-expanded={crewOpen}
+                onClick={() => {
+                  setCrewOpen((open) => !open)
+                  setParishOpen(false)
+                }}
+              >
+                <span>
+                  {crewFilter.length === 0
+                    ? `All crews (${crewsPresent.length})`
+                    : crewFilter.length === 1
+                      ? crewFilter[0]
+                      : `${crewFilter.length} crews selected`}
+                </span>
+                <em aria-hidden="true">{crewOpen ? '▴' : '▾'}</em>
+              </button>
+              {crewOpen && (
+                <div className="roster-picker-panel" role="listbox" aria-multiselectable="true" aria-label="Choose crews">
+                  <input
+                    type="search"
+                    value={crewNeedle}
+                    placeholder={`Search ${crewsPresent.length} crews`}
+                    autoFocus
+                    onChange={(event) => setCrewNeedle(event.target.value)}
+                  />
+                  <div className="roster-picker-list">
+                    {crewChoices.length === 0 ? (
+                      <p className="roster-chip-empty">{crewNeedle ? 'No crew matches' : 'No crews in this set'}</p>
+                    ) : (
+                      crewChoices.map((crew) => {
+                        const on = crewFilter.includes(crew)
+                        return (
+                          <button
+                            key={crew}
+                            type="button"
+                            role="option"
+                            aria-selected={on}
+                            className={on ? 'roster-pick on' : 'roster-pick'}
+                            onClick={() => toggleCrew(crew)}
+                          >
+                            <i aria-hidden="true" />
+                            <span>{crew}</span>
+                          </button>
+                        )
+                      })
+                    )}
+                  </div>
+                </div>
+              )}
+              {crewFilter.length > 0 && (
+                <div className="roster-selected-chips" aria-label="Selected crews">
+                  {crewFilter.map((crew) => (
+                    <button key={crew} type="button" className="filter-chip on" onClick={() => toggleCrew(crew)}>
+                      {crew}
+                      <span aria-hidden="true">×</span>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {parishesPresent.length > 0 && (
+              <div className="roster-field" ref={parishPickerRef}>
+                <div className="roster-field-label">
+                  <LabelHint tip="rosterParish" label="About parish filter">
+                    Parish
+                  </LabelHint>
+                  {parishFilter.length > 0 && (
+                    <button
+                      type="button"
+                      className="roster-text-btn"
+                      onClick={() => {
+                        setParishFilter([])
+                        setPage(0)
+                      }}
+                    >
+                      All parishes
+                    </button>
+                  )}
+                </div>
                 <button
                   type="button"
-                  className="roster-text-btn"
-                  disabled={parishFilter.length === 0}
+                  className={parishOpen ? 'roster-picker-trigger on' : 'roster-picker-trigger'}
+                  aria-expanded={parishOpen}
                   onClick={() => {
-                    setParishFilter([])
+                    setParishOpen((open) => !open)
+                    setCrewOpen(false)
+                  }}
+                >
+                  <span>
+                    {parishFilter.length === 0
+                      ? `All parishes (${parishesPresent.length})`
+                      : parishFilter.length === 1
+                        ? parishFilter[0]
+                        : `${parishFilter.length} parishes selected`}
+                  </span>
+                  <em aria-hidden="true">{parishOpen ? '▴' : '▾'}</em>
+                </button>
+                {parishOpen && (
+                  <div className="roster-picker-panel" role="listbox" aria-multiselectable="true" aria-label="Choose parishes">
+                    <div className="roster-picker-list">
+                      {parishesPresent.map((parish) => {
+                        const on = parishFilter.includes(parish)
+                        return (
+                          <button
+                            key={parish}
+                            type="button"
+                            role="option"
+                            aria-selected={on}
+                            className={on ? 'roster-pick on' : 'roster-pick'}
+                            onClick={() => toggleParish(parish)}
+                          >
+                            <i aria-hidden="true" />
+                            <span>{parish}</span>
+                          </button>
+                        )
+                      })}
+                    </div>
+                  </div>
+                )}
+                {parishFilter.length > 0 && (
+                  <div className="roster-selected-chips" aria-label="Selected parishes">
+                    {parishFilter.map((parish) => (
+                      <button key={parish} type="button" className="filter-chip on" onClick={() => toggleParish(parish)}>
+                        {parish}
+                        <span aria-hidden="true">×</span>
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+
+            <div className="roster-field">
+              <div className="roster-field-label">
+                <LabelHint tip="rosterSort" label="About sort">
+                  Sort
+                </LabelHint>
+              </div>
+              <label className="roster-sort">
+                <span className="visually-hidden">Sort jobs</span>
+                <select
+                  value={sortMode}
+                  onChange={(event) => {
+                    setSortMode(event.target.value as SortMode)
                     setPage(0)
                   }}
                 >
-                  All parishes
-                </button>
-              </div>
-              <div className="roster-chip-scroll" role="group" aria-label="Parish filter">
-                {parishesPresent.map((parish) => {
-                  const on = parishFilter.includes(parish)
-                  return (
-                    <button
-                      key={parish}
-                      type="button"
-                      className={on ? 'filter-chip on' : 'filter-chip'}
-                      aria-pressed={on}
-                      onClick={() => toggleParish(parish)}
-                    >
-                      {parish}
-                    </button>
-                  )
-                })}
-              </div>
+                  {sortOptions.map((option) => (
+                    <option key={option.value} value={option.value}>
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
+              </label>
             </div>
-          )}
-
-          <div className="roster-control roster-sort-control">
-            <div className="roster-control-head">
-              <span>Sort</span>
-              {(crewFilter.length > 0 || parishFilter.length > 0 || query) && (
-                <button type="button" className="roster-text-btn" onClick={clearSmartFilters}>
-                  Clear filters
-                </button>
-              )}
-            </div>
-            <label className="roster-sort">
-              <span className="visually-hidden">Sort jobs</span>
-              <select
-                value={sortMode}
-                onChange={(event) => {
-                  setSortMode(event.target.value as SortMode)
-                  setPage(0)
-                }}
-              >
-                {sortOptions.map((option) => (
-                  <option key={option.value} value={option.value}>
-                    {option.label}
-                  </option>
-                ))}
-              </select>
-            </label>
           </div>
         </div>
 

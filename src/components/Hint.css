@@ -1,0 +1,88 @@
+.hint-wrap {
+  position: relative;
+  display: inline-flex;
+  vertical-align: middle;
+  margin-left: 6px;
+}
+
+.hint-btn {
+  width: 28px;
+  height: 28px;
+  min-width: 28px;
+  padding: 0;
+  border-radius: 99px;
+  border: 1px solid var(--line-strong);
+  background: var(--input-bg);
+  color: var(--muted);
+  font-family: var(--font-display);
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.hint-btn:hover,
+.hint-btn:focus-visible,
+.hint-btn.on {
+  color: var(--text);
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  outline: none;
+}
+
+.hint-pop {
+  position: absolute;
+  z-index: 60;
+  top: calc(100% + 8px);
+  left: 50%;
+  transform: translateX(-50%);
+  width: min(280px, 70vw);
+  padding: 12px 14px;
+  border-radius: var(--radius);
+  border: 1px solid var(--line-strong);
+  background: var(--panel);
+  color: var(--text);
+  box-shadow: var(--shadow);
+  font-size: 13px;
+  line-height: 1.45;
+  font-weight: 400;
+  letter-spacing: 0;
+  text-transform: none;
+  font-family: var(--font-body);
+  text-align: left;
+}
+
+.hint-pop::before {
+  content: '';
+  position: absolute;
+  top: -5px;
+  left: 50%;
+  width: 10px;
+  height: 10px;
+  background: var(--panel);
+  border-left: 1px solid var(--line-strong);
+  border-top: 1px solid var(--line-strong);
+  transform: translateX(-50%) rotate(45deg);
+}
+
+.label-hint {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  min-width: 0;
+}
+
+/* Prefer opening upward when near the bottom of the viewport */
+@media (max-height: 640px) {
+  .hint-pop {
+    top: auto;
+    bottom: calc(100% + 8px);
+  }
+
+  .hint-pop::before {
+    top: auto;
+    bottom: -5px;
+    transform: translateX(-50%) rotate(225deg);
+  }
+}

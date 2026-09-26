@@ -4,6 +4,7 @@ import { descriptiveStats, fieldBreakdown, topShares, type CategoricalSummary, t
 import { categoricalColumns, numericColumns } from '../lib/rows'
 import { dateStamp, displayValue, formatInt } from '../lib/format'
 import { downloadCsv } from '../lib/download'
+import { LabelHint } from '../components/Hint'
 import './StatsView.css'
 
 type Props = {
@@ -103,7 +104,11 @@ export function StatsView({ headers, rows, config, onChange, monthLabel }: Props
     <section className="panel stats-view">
       <div className="panel-head">
         <div>
-          <p className="kicker">Field story</p>
+          <p className="kicker">
+            <LabelHint tip="statsBoard" label="About Stats">
+              Field story
+            </LabelHint>
+          </p>
           <h2>{formatInt(rows.length)} jobs in view</h2>
           {monthLabel && <p className="stats-month">{monthLabel}</p>}
         </div>
@@ -114,7 +119,10 @@ export function StatsView({ headers, rows, config, onChange, monthLabel }: Props
 
       <p className="stats-lede">
         Share and dominance for the categories in view. Response times live on the Command board — this sheet’s
-        source columns are mostly categories.
+        source columns are mostly categories.{' '}
+        <LabelHint tip="statsFocus" label="About value focus">
+          Focus tip
+        </LabelHint>
       </p>
 
       <div className="stats-picker">
