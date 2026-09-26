@@ -249,22 +249,43 @@ export function CommandView({
             </div>
           </div>
 
-          <div className="seg chart-seg" role="group" aria-label="Chart">
-            {(
-              [
-                ['stages', 'Stages'],
-                ['avg', 'Avg vs median'],
-                ['total', 'Total'],
-                ['weather', 'Weather'],
-              ] as const
-            ).map(([id, label]) => (
-              <button key={id} type="button" aria-pressed={chartMode === id} onClick={() => setChartMode(id)}>
-                {label}
-              </button>
-            ))}
+          <div className="comparison-tools">
+            <div className="seg chart-seg" role="group" aria-label="Chart">
+              {(
+                [
+                  ['stages', 'Stages'],
+                  ['avg', 'Avg vs median'],
+                  ['total', 'Total'],
+                  ['weather', 'Weather'],
+                ] as const
+              ).map(([id, label]) => (
+                <button key={id} type="button" aria-pressed={chartMode === id} onClick={() => setChartMode(id)}>
+                  {label}
+                </button>
+              ))}
+            </div>
+            {chartMode !== 'weather' && rows.length > 0 && (
+              <div className="comparison-find">
+                <label className="crew-search inline">
+                  <span className="visually-hidden">Find crew</span>
+                  <input
+                    type="search"
+                    value={crewQuery}
+                    placeholder="Find crew…"
+                    onChange={(event) => setCrewQuery(event.target.value)}
+                    aria-label="Find crew"
+                  />
+                </label>
+                {selectedCrew && (
+                  <button type="button" className="text-btn" onClick={() => onSelectCrew(null)}>
+                    Clear
+                  </button>
+                )}
+              </div>
+            )}
           </div>
           {chartMode === 'avg' && (
-            <p className="toolbar-tip-row" style={{ marginTop: 4 }}>
+            <p className="toolbar-tip-row" style={{ marginTop: 0 }}>
               <LabelHint tip="avgVsMedian" label="About average vs median">
                 Why avg vs median
               </LabelHint>
@@ -277,33 +298,16 @@ export function CommandView({
                 <button
                   key={item.key}
                   type="button"
-                  className={`outlier-chip ${item.tone}${selectedCrew === item.crew ? ' on' : ''}`}
+                  className={`outlier-tile ${item.tone}${selectedCrew === item.crew ? ' on' : ''}`}
                   onClick={() => toggleCrew(item.crew)}
+                  title={`${item.label}${item.detail ? ` · ${item.detail}` : ''} · ${item.crew} · ${item.value}`}
                 >
-                  <span>{item.label}</span>
-                  <strong>{item.crew}</strong>
-                  <em>{item.value}</em>
+                  <span className="outlier-kicker">{item.label}</span>
+                  {item.detail && <span className="outlier-detail">{item.detail}</span>}
+                  <strong className="outlier-crew">{item.crew}</strong>
+                  <em className="outlier-value">{item.value}</em>
                 </button>
               ))}
-            </div>
-          )}
-
-          {chartMode !== 'weather' && rows.length > 0 && (
-            <div className="chart-controls">
-              <label className="crew-search">
-                <span>Find crew</span>
-                <input
-                  type="search"
-                  value={crewQuery}
-                  placeholder="Type a name…"
-                  onChange={(event) => setCrewQuery(event.target.value)}
-                />
-              </label>
-              {selectedCrew && (
-                <button type="button" className="text-btn" onClick={() => onSelectCrew(null)}>
-                  Clear focus
-                </button>
-              )}
             </div>
           )}
 
@@ -706,6 +710,7 @@ function FocusCard({
 type Outlier = {
   key: string
   label: string
+  detail?: string
   crew: string
   value: string
   tone: 'good' | 'bad' | 'warn' | 'neutral'
@@ -748,8 +753,9 @@ function buildOutliers(rows: CrewSummaryRow[], stageLabels: string[]): Outlier[]
     items.push({
       key: 'skew',
       label: 'Biggest skew',
+      detail: `avg ${formatDuration(skewCrew.avg)} · med ${formatDuration(skewCrew.median)}`,
       crew: skewCrew.crew,
-      value: `avg ${formatDuration(skewCrew.avg)} · med ${formatDuration(skewCrew.median)}`,
+      value: `+${formatDuration(skewGap)}`,
       tone: 'warn',
     })
   }
@@ -770,9 +776,10 @@ function buildOutliers(rows: CrewSummaryRow[], stageLabels: string[]): Outlier[]
     if (stageVal > 0) {
       items.push({
         key: 'stage',
-        label: `Bottleneck · ${shortStage(stageLabels[stageIndex])}`,
+        label: 'Bottleneck',
+        detail: shortStage(stageLabels[stageIndex]),
         crew: stageCrew.crew,
-        value: `${stageVal.toFixed(1)}m`,
+        value: formatDuration(stageVal),
         tone: 'neutral',
       })
     }

@@ -990,7 +990,7 @@ button.insight {
 
 .crew-detail span { color: var(--muted); }
 
-.chart-seg { margin-bottom: var(--space-3); }
+.chart-seg { margin-bottom: 0; }
 
 .comparison-panel {
   display: grid;
@@ -999,60 +999,121 @@ button.insight {
 
 .comparison-panel .panel-head { margin-bottom: 0; }
 
+.comparison-tools {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px 12px;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.comparison-tools .seg {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.comparison-find {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: 1 1 180px;
+  max-width: 280px;
+  margin-left: auto;
+}
+
+.crew-search.inline {
+  display: block;
+  flex: 1 1 auto;
+  max-width: none;
+  gap: 0;
+}
+
+.crew-search.inline input {
+  width: 100%;
+  min-height: 40px;
+}
+
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
 .outlier-strip {
   display: grid;
   grid-template-columns: 1fr;
   gap: var(--space-2);
 }
 
-.outlier-chip {
-  display: grid;
-  grid-template-columns: auto 1fr auto;
-  gap: var(--space-2);
-  align-items: baseline;
-  padding: 10px 12px;
+.outlier-tile {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  padding: 12px 14px;
   border-radius: var(--radius);
   border: 1px solid var(--line);
   background: var(--panel-2);
   text-align: left;
-  min-height: var(--touch);
+  min-height: 92px;
+  min-width: 0;
   transition: background 0.15s ease, border-color 0.15s ease;
 }
 
-.outlier-chip span {
+.outlier-kicker {
   font-family: var(--font-display);
   text-transform: uppercase;
-  letter-spacing: 0.05em;
+  letter-spacing: 0.06em;
   font-size: 11px;
   color: var(--muted);
+  line-height: 1.2;
 }
 
-.outlier-chip strong {
+.outlier-detail {
+  color: var(--text);
+  font-size: 12px;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+.outlier-crew {
   font-size: 15px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  font-weight: 600;
+  line-height: 1.3;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+  width: 100%;
 }
 
-.outlier-chip em {
+.outlier-value {
+  margin-top: auto;
+  padding-top: 4px;
   font-style: normal;
   font-variant-numeric: tabular-nums;
-  color: var(--muted);
-  font-size: 13px;
-  white-space: nowrap;
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--text);
+  line-height: 1.2;
 }
 
-.outlier-chip.good { box-shadow: inset 3px 0 0 var(--good); }
-.outlier-chip.bad { box-shadow: inset 3px 0 0 var(--bad); }
-.outlier-chip.warn { box-shadow: inset 3px 0 0 var(--warn); }
-.outlier-chip.neutral { box-shadow: inset 3px 0 0 var(--accent); }
+.outlier-tile.good { box-shadow: inset 3px 0 0 var(--good); }
+.outlier-tile.bad { box-shadow: inset 3px 0 0 var(--bad); }
+.outlier-tile.warn { box-shadow: inset 3px 0 0 var(--warn); }
+.outlier-tile.neutral { box-shadow: inset 3px 0 0 var(--accent); }
 
-.outlier-chip:hover,
-.outlier-chip:focus-visible {
+.outlier-tile:hover,
+.outlier-tile:focus-visible {
   border-color: var(--line-strong);
 }
 
-.outlier-chip.on {
+.outlier-tile.on {
   background: var(--open-bg);
   border-color: var(--line-strong);
 }
