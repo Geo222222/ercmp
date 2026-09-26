@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useState } from 'react'
-import type { BoardConfig, CleaningMode, CrewReport, CrewSummaryRow, FlagRow, MonthSnapshot } from '../types'
+import type { BoardConfig, CleaningMode, CrewReport, CrewSummaryRow, FlagRow, MonthDataset, MonthSnapshot } from '../types'
 import { Briefing } from '../components/Briefing'
 import { GroupedBars } from '../components/GroupedBars'
+import { MonthRail } from '../components/MonthRail'
 import { downloadCsv } from '../lib/download'
 import { dateStamp, displayValue, formatDuration, formatInt, shortStage } from '../lib/format'
 import { monthTone, rangeNote } from '../lib/excel'
@@ -19,6 +20,13 @@ type Props = {
   onSelectCrew: (crew: string | null) => void
   /** Per-active-month reports for side-by-side comparison (1 = single-month mode). */
   monthSnapshots?: MonthSnapshot[]
+  months: MonthDataset[]
+  focusMonthId: string | null
+  onToggleMonth: (id: string) => void
+  onFocusMonth: (id: string) => void
+  onSelectAllMonths: () => void
+  onSelectOnlyMonth: (id: string) => void
+  onMonthFiles: (files: File[]) => void
 }
 
 type Severity = 'critical' | 'high' | 'watch'
@@ -44,6 +52,13 @@ export function CommandView({
   selectedCrew,
   onSelectCrew,
   monthSnapshots = [],
+  months,
+  focusMonthId,
+  onToggleMonth,
+  onFocusMonth,
+  onSelectAllMonths,
+  onSelectOnlyMonth,
+  onMonthFiles,
 }: Props) {
   const [chartMode, setChartMode] = useState<ChartMode>('stages')
   const [showTable, setShowTable] = useState(false)
@@ -111,6 +126,16 @@ export function CommandView({
 
   return (
     <div className="command">
+      <MonthRail
+        months={months}
+        focusMonthId={focusMonthId}
+        onToggle={onToggleMonth}
+        onFocus={onFocusMonth}
+        onSelectAll={onSelectAllMonths}
+        onSelectOnly={onSelectOnlyMonth}
+        onFiles={onMonthFiles}
+      />
+
       <div className="toolbar">
         <div className="modes" role="group" aria-label="Cleaning mode">
           <button type="button" className={mode === 'cleaned' ? 'mode on' : 'mode'} onClick={() => onMode('cleaned')}>
@@ -884,7 +909,7 @@ function ChartBody({
   onSelectCrew: (crew: string) => void
 }) {
   if (mode === 'weather') {
-    if (weatherCol === 'none') return <p className="empty">Pick a breakdown column in Filters. Weather Condition is the usual one.</p>
+    if (weatherCol === 'none') return <p className="empty">Pick a breakdown column in Setup. Weather Condition is the usual one.</p>
     if (weather.length === 0) return <p className="empty">No jobs remain for this breakdown.</p>
     return (
       <GroupedBars

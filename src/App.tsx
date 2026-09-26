@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState, type DragEvent } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import type { BoardConfig, CleaningMode, MonthDataset, MonthSnapshot, Row } from './types'
 import {
   createMonthDataset,
@@ -14,14 +14,14 @@ import { defaultConfig } from './lib/defaults'
 import { filterRows, valueCounts } from './lib/rows'
 import { buildCrewReport } from './lib/crew'
 import { displayValue, formatInt } from './lib/format'
-import { applyTheme, readTheme, THEMES, type ThemeId } from './lib/theme'
+import { applyTheme, readTheme, type ThemeId } from './lib/theme'
 import { MonthProvider, type MonthContextValue } from './lib/monthContext'
 import { CommandView } from './views/CommandView'
 import { RosterView } from './views/RosterView'
 import { StatsView } from './views/StatsView'
 import { ChartsView } from './views/ChartsView'
 import { FilterDrawer } from './components/FilterDrawer'
-import { MonthRail } from './components/MonthRail'
+import { ThemeOrb } from './components/ThemeOrb'
 import { ErcmpLogo } from './components/ErcmpLogo'
 import './styles/months.css'
 
@@ -39,7 +39,6 @@ export function App() {
   const [mode, setMode] = useState<CleaningMode>('cleaned')
   const [selectedCrew, setSelectedCrew] = useState<string | null>(null)
   const [theme, setTheme] = useState<ThemeId>(() => readTheme())
-  const [dragOver, setDragOver] = useState(false)
 
   useEffect(() => {
     applyTheme(theme)
@@ -247,25 +246,6 @@ export function App() {
     )
   }
 
-  function onDragOver(event: DragEvent) {
-    if (![...event.dataTransfer.types].includes('Files')) return
-    event.preventDefault()
-    event.dataTransfer.dropEffect = 'copy'
-    setDragOver(true)
-  }
-
-  function onDragLeave(event: DragEvent) {
-    if (event.currentTarget.contains(event.relatedTarget as Node)) return
-    setDragOver(false)
-  }
-
-  function onDrop(event: DragEvent) {
-    event.preventDefault()
-    setDragOver(false)
-    const files = [...event.dataTransfer.files]
-    void ingestFiles(files)
-  }
-
   const monthContext: MonthContextValue = {
     monthDatasets: months,
     activeMonths,
@@ -291,12 +271,7 @@ export function App() {
 
   return (
     <MonthProvider value={monthContext}>
-      <div
-        className={dragOver ? 'app month-drop-active' : 'app'}
-        onDragOver={onDragOver}
-        onDragLeave={onDragLeave}
-        onDrop={onDrop}
-      >
+      <div className="app">
         <header className="topbar">
           <div className="brand">
             <ErcmpLogo className="brand-logo" />
@@ -306,13 +281,6 @@ export function App() {
             </div>
           </div>
           <div className="top-meta" role="status" aria-live="polite">
-            <div className="meta-cell live">
-              <i className="pulse" aria-hidden="true" />
-              <div>
-                <span className="meta-label">Status</span>
-                <strong>Live board</strong>
-              </div>
-            </div>
             <div className="meta-cell">
               <span className="meta-label">Months</span>
               <strong>{activeLabel}</strong>
@@ -329,39 +297,13 @@ export function App() {
             </div>
           </div>
           <div className="top-actions">
-            <div className="theme-switcher" role="group" aria-label="Color theme">
-              {THEMES.map((item) => (
-                <button
-                  key={item.id}
-                  type="button"
-                  title={item.hint}
-                  aria-pressed={theme === item.id}
-                  onClick={() => setTheme(item.id)}
-                >
-                  <span className="theme-dot" data-theme-swatch={item.id} aria-hidden="true" />
-                  {item.label}
-                </button>
-              ))}
-            </div>
+            <ThemeOrb theme={theme} onTheme={setTheme} />
             <button type="button" className="solid console-btn" onClick={() => setDrawer(true)} disabled={!ready}>
               <span className="console-btn-mark" aria-hidden="true" />
-              Filters
+              Setup
             </button>
           </div>
         </header>
-
-        {(months.length > 0 || dragOver) && (
-          <MonthRail
-            months={months}
-            focusMonthId={focusMonth?.id ?? null}
-            dragOver={dragOver}
-            onToggle={toggleMonth}
-            onFocus={setFocusMonthId}
-            onSelectAll={() => setMonthFilter(months.map((item) => item.id))}
-            onSelectOnly={(id) => setMonthFilter([id])}
-            onFiles={ingestFiles}
-          />
-        )}
 
         {ready && config && globalOptions.length > 0 && globalOptions.length <= 24 && (
           <FilterChips
@@ -386,7 +328,7 @@ export function App() {
             <section className="panel">
               <h2>Workbook needed</h2>
               <p>{error}</p>
-              <p className="hint">Drop `.xlsx` files onto the board, or place them in `data/` / the project root.</p>
+              <p className="hint">Drop `.xlsx` on Command, or place files in `data/` / the project root.</p>
               <UploadButton onUpload={onUpload} />
             </section>
           )}
@@ -401,6 +343,13 @@ export function App() {
               selectedCrew={selectedCrew}
               onSelectCrew={setSelectedCrew}
               monthSnapshots={monthSnapshots}
+              months={months}
+              focusMonthId={focusMonth?.id ?? null}
+              onToggleMonth={toggleMonth}
+              onFocusMonth={setFocusMonthId}
+              onSelectAllMonths={() => setMonthFilter(months.map((item) => item.id))}
+              onSelectOnlyMonth={(id) => setMonthFilter([id])}
+              onMonthFiles={ingestFiles}
             />
           )}
           {ready && focusTable && view === 'roster' && <RosterView headers={focusTable.headers} rows={combinedRows} />}

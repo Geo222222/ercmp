@@ -1,41 +1,122 @@
 /* Multi-month strip + Command comparison — keep scoped so theme chrome can evolve elsewhere. */
 
 .month-rail {
+  --month-rail-pad: 14px;
   display: grid;
-  gap: 10px;
-  padding: 10px 12px;
-  border: 1px solid var(--line);
-  border-radius: 4px;
+  gap: 14px;
+  margin-bottom: var(--space-3);
+  padding: var(--month-rail-pad);
+  border: 1px solid color-mix(in srgb, var(--accent) 28%, var(--line-strong));
+  border-radius: 6px;
   background:
-    linear-gradient(180deg, color-mix(in srgb, var(--panel) 88%, transparent), var(--panel)),
-    var(--panel);
-  box-shadow: inset 0 1px 0 color-mix(in srgb, var(--accent) 12%, transparent);
+    radial-gradient(120% 80% at 0% 0%, color-mix(in srgb, var(--accent) 16%, transparent), transparent 55%),
+    radial-gradient(90% 70% at 100% 100%, color-mix(in srgb, var(--accent) 10%, transparent), transparent 50%),
+    linear-gradient(180deg, color-mix(in srgb, var(--panel) 88%, var(--accent) 6%), var(--panel));
+  box-shadow:
+    inset 0 1px 0 color-mix(in srgb, var(--text) 8%, transparent),
+    0 10px 28px color-mix(in srgb, var(--bg) 55%, transparent),
+    var(--shadow);
+  transition:
+    border-color 160ms ease,
+    box-shadow 160ms ease,
+    background 160ms ease,
+    transform 160ms ease;
 }
 
-.month-rail-head {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 8px 16px;
+.month-drop-well {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: 14px 16px;
+  align-items: center;
+  padding: 14px 16px;
+  border: 1px solid color-mix(in srgb, var(--accent) 40%, var(--line));
+  border-radius: 5px;
+  background:
+    linear-gradient(135deg, color-mix(in srgb, var(--accent) 12%, var(--panel-2)), var(--panel-2) 45%, color-mix(in srgb, var(--bg) 35%, var(--panel)));
+  box-shadow:
+    inset 0 0 0 1px color-mix(in srgb, var(--accent) 12%, transparent),
+    inset 0 1px 0 color-mix(in srgb, var(--text) 6%, transparent);
+  min-height: 92px;
 }
 
-.month-rail-head .kicker {
+.month-drop-beacon {
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  border: 1px solid color-mix(in srgb, var(--accent) 55%, var(--line-strong));
+  background:
+    radial-gradient(circle at 35% 30%, color-mix(in srgb, var(--text) 18%, transparent), transparent 42%),
+    color-mix(in srgb, var(--accent) 22%, var(--bg));
+  box-shadow:
+    0 0 0 4px color-mix(in srgb, var(--accent) 12%, transparent),
+    0 0 22px color-mix(in srgb, var(--accent) 28%, transparent);
+  flex: 0 0 auto;
+}
+
+.month-drop-icon {
+  width: 22px;
+  height: 26px;
+  border: 2px solid currentColor;
+  border-radius: 3px;
+  color: var(--accent);
+  position: relative;
+  box-shadow: inset 0 -8px 0 color-mix(in srgb, var(--accent) 18%, transparent);
+}
+
+.month-drop-icon::before {
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: 6px;
+  width: 2px;
+  height: 10px;
+  background: currentColor;
+  transform: translateX(-50%);
+}
+
+.month-drop-icon::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: 12px;
+  width: 8px;
+  height: 8px;
+  border-right: 2px solid currentColor;
+  border-bottom: 2px solid currentColor;
+  transform: translateX(-50%) rotate(45deg);
+}
+
+.month-drop-copy {
+  min-width: 0;
+  display: grid;
+  gap: 4px;
+}
+
+.month-drop-kicker {
   margin: 0;
+  color: var(--accent);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
 }
 
-.month-rail-head h2 {
+.month-drop-copy h2 {
   margin: 0;
-  font-size: 15px;
+  font-size: clamp(18px, 2.4vw, 22px);
   letter-spacing: 0.04em;
   text-transform: uppercase;
+  line-height: 1.15;
 }
 
 .month-rail-note {
   margin: 0;
   color: var(--muted);
-  font-size: 12px;
-  max-width: 42ch;
+  font-size: 13px;
+  max-width: 54ch;
+  line-height: 1.35;
 }
 
 .month-rail-actions {
@@ -43,14 +124,61 @@
   flex-wrap: wrap;
   gap: 8px;
   align-items: center;
+  justify-content: flex-end;
+}
+
+.month-add-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  font-family: var(--font-display);
+}
+
+.month-add-mark {
+  width: 12px;
+  height: 12px;
+  border: 1.5px solid currentColor;
+  border-radius: 2px;
+  background:
+    linear-gradient(currentColor, currentColor) center / 8px 1.5px no-repeat,
+    linear-gradient(currentColor, currentColor) center / 1.5px 8px no-repeat;
+}
+
+.month-chip-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 6px 12px;
+}
+
+.month-chip-head .kicker {
+  margin: 0;
+}
+
+.month-chip-head span {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.month-empty-hint {
+  margin: 0;
+  padding: 10px 12px;
+  border: 1px dashed color-mix(in srgb, var(--accent) 35%, var(--line));
+  border-radius: 4px;
+  color: var(--muted);
+  font-size: 13px;
+  background: color-mix(in srgb, var(--bg) 40%, transparent);
 }
 
 .month-chips {
   display: flex;
   flex-wrap: nowrap;
-  gap: 8px;
+  gap: 10px;
   overflow-x: auto;
-  padding-bottom: 2px;
+  padding: 2px 2px 6px;
   -webkit-overflow-scrolling: touch;
   scrollbar-width: none;
 }
@@ -60,54 +188,57 @@
 }
 
 .month-chip {
-  --month-chip-min: 44px;
+  --month-chip-min: 48px;
   display: inline-grid;
   grid-template-columns: auto 1fr;
   grid-template-rows: auto auto;
   column-gap: 10px;
   align-items: center;
   min-height: var(--month-chip-min);
-  min-width: 7.5rem;
-  padding: 8px 12px;
+  min-width: 8rem;
+  padding: 10px 14px;
   border: 1px solid var(--line);
-  border-radius: 4px;
-  background: color-mix(in srgb, var(--bg) 70%, var(--panel));
+  border-radius: 5px;
+  background: color-mix(in srgb, var(--bg) 55%, var(--panel));
   color: var(--text);
   text-align: left;
   cursor: pointer;
   touch-action: manipulation;
-  transition: border-color 120ms ease, background 120ms ease, box-shadow 120ms ease;
+  transition: border-color 120ms ease, background 120ms ease, box-shadow 120ms ease, transform 120ms ease;
 }
 
 .month-chip:hover,
 .month-chip:focus-visible {
   border-color: var(--line-strong);
   outline: none;
+  transform: translateY(-1px);
 }
 
 .month-chip.on {
   border-color: color-mix(in srgb, var(--accent) 65%, var(--line-strong));
   background: color-mix(in srgb, var(--accent) 18%, var(--panel));
-  box-shadow: inset 3px 0 0 var(--accent);
+  box-shadow:
+    inset 3px 0 0 var(--accent),
+    0 6px 16px color-mix(in srgb, var(--accent) 12%, transparent);
 }
 
 .month-chip.focus {
   outline: 2px solid color-mix(in srgb, var(--accent) 55%, transparent);
-  outline-offset: 1px;
+  outline-offset: 2px;
 }
 
 .month-chip-swatch {
   grid-row: 1 / span 2;
-  width: 10px;
-  height: 10px;
-  border-radius: 2px;
+  width: 11px;
+  height: 11px;
+  border-radius: 50%;
   background: var(--month-tone, var(--accent));
-  box-shadow: 0 0 0 1px color-mix(in srgb, var(--month-tone, var(--accent)) 35%, transparent);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--month-tone, var(--accent)) 30%, transparent);
 }
 
 .month-chip strong {
-  font-size: 13px;
-  letter-spacing: 0.02em;
+  font-size: 14px;
+  letter-spacing: 0.03em;
   line-height: 1.2;
 }
 
@@ -119,7 +250,7 @@
 }
 
 .month-chip[aria-pressed='false'] {
-  opacity: 0.62;
+  opacity: 0.58;
 }
 
 .month-chip[aria-pressed='false'] .month-chip-swatch {
@@ -287,24 +418,72 @@
   font-size: 11px;
 }
 
+.month-rail.drop-target {
+  border-color: color-mix(in srgb, var(--accent) 75%, var(--line-strong));
+  box-shadow:
+    inset 0 0 0 1px color-mix(in srgb, var(--accent) 28%, transparent),
+    0 0 0 5px color-mix(in srgb, var(--accent) 14%, transparent),
+    0 14px 36px color-mix(in srgb, var(--accent) 16%, transparent);
+  transform: translateY(-1px);
+}
+
+.month-rail.drop-target .month-drop-well {
+  border-style: solid;
+  border-color: var(--accent);
+  background:
+    linear-gradient(135deg, color-mix(in srgb, var(--accent) 28%, var(--panel-2)), color-mix(in srgb, var(--accent) 12%, var(--panel)));
+}
+
+.month-rail.drop-target .month-drop-beacon {
+  animation: month-drop-pulse 1.1s ease-out infinite;
+}
+
+@keyframes month-drop-pulse {
+  0%,
+  100% {
+    box-shadow:
+      0 0 0 4px color-mix(in srgb, var(--accent) 18%, transparent),
+      0 0 22px color-mix(in srgb, var(--accent) 30%, transparent);
+  }
+  50% {
+    box-shadow:
+      0 0 0 10px color-mix(in srgb, var(--accent) 8%, transparent),
+      0 0 34px color-mix(in srgb, var(--accent) 42%, transparent);
+  }
+}
+
+@media (max-width: 900px) {
+  .month-drop-well {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+
+  .month-rail-actions {
+    grid-column: 1 / -1;
+    justify-content: stretch;
+  }
+
+  .month-rail-actions .ghost,
+  .month-rail-actions .solid {
+    flex: 1 1 auto;
+  }
+}
+
 @media (max-width: 720px) {
+  .month-drop-well {
+    grid-template-columns: 1fr;
+    justify-items: start;
+  }
+
+  .month-drop-beacon {
+    width: 48px;
+    height: 48px;
+  }
+
   .month-chip {
-    min-width: 6.75rem;
+    min-width: 7rem;
   }
 
   .month-rail-note {
     max-width: none;
   }
-}
-
-.app.month-drop-active {
-  outline: 2px dashed color-mix(in srgb, var(--accent) 70%, transparent);
-  outline-offset: -6px;
-}
-
-.month-rail.drop-target {
-  border-color: color-mix(in srgb, var(--accent) 70%, var(--line-strong));
-  box-shadow:
-    inset 0 0 0 1px color-mix(in srgb, var(--accent) 35%, transparent),
-    0 0 0 4px color-mix(in srgb, var(--accent) 12%, transparent);
 }
