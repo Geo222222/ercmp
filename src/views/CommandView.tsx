@@ -1,11 +1,10 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import type { BoardConfig, CleaningMode, CrewReport, CrewSummaryRow } from '../types'
 import { Briefing } from '../components/Briefing'
 import { GroupedBars } from '../components/GroupedBars'
 import { downloadCsv } from '../lib/download'
 import { dateStamp, displayValue, formatDuration, formatInt, shortStage } from '../lib/format'
-
-const STAGE_COLORS = ['#2ee6c7', '#4aa3ff', '#f0b429', '#ff8a5b', '#c792ea', '#9eb4c4']
+import { themePalette } from '../lib/theme'
 
 type ChartMode = 'stages' | 'avg' | 'total' | 'weather'
 
@@ -22,12 +21,21 @@ type Props = {
 export function CommandView({ report, config, mode, onMode, onMinJobs, selectedCrew, onSelectCrew }: Props) {
   const [chartMode, setChartMode] = useState<ChartMode>('stages')
   const [showTable, setShowTable] = useState(false)
+  const [palette, setPalette] = useState(() => themePalette())
   const rows = mode === 'cleaned' ? report.cleaned : report.raw
   const weather = mode === 'cleaned' ? report.weatherCleaned : report.weatherRaw
   const boardJobs = rows.reduce((sum, row) => sum + row.jobs, 0)
   const fastest = rows[0]
   const slowest = rows[rows.length - 1]
   const maxAvg = Math.max(...rows.map((row) => row.avg), 1)
+
+  useEffect(() => {
+    const sync = () => setPalette(themePalette())
+    sync()
+    const observer = new MutationObserver(sync)
+    observer.observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] })
+    return () => observer.disconnect()
+  }, [])
 
   function download() {
     const headers = [
@@ -82,7 +90,7 @@ export function CommandView({ report, config, mode, onMode, onMinJobs, selectedC
 
       {report.error && <p className="banner">{report.error}</p>}
 
-      <section className="kpis">
+      <section className="kpis" aria-label="Board metrics">
         <Kpi label="Jobs on board" value={formatInt(boardJobs)} note="After the minimum-jobs cut" />
         <Kpi label="Crews" value={formatInt(rows.length)} note="Ranked on this board" />
         <Kpi
@@ -132,6 +140,8 @@ export function CommandView({ report, config, mode, onMode, onMinJobs, selectedC
                   stageLabels={report.stageLabels}
                   selected={selectedCrew === row.crew}
                   onSelect={() => onSelectCrew(selectedCrew === row.crew ? null : row.crew)}
+                  rankFast={palette.rankFast}
+                  rankSlow={palette.rankSlow}
                 />
               ))}
             </div>
@@ -167,12 +177,13 @@ export function CommandView({ report, config, mode, onMode, onMinJobs, selectedC
             stageLabels={report.stageLabels}
             weatherCol={config.weatherCol}
             highlight={selectedCrew}
+            palette={palette}
           />
           {chartMode === 'stages' && (
             <div className="legend">
               {report.stageLabels.map((label, index) => (
                 <span key={label}>
-                  <i style={{ background: STAGE_COLORS[index % STAGE_COLORS.length] }} />
+                  <i style={{ background: palette.stages[index % palette.stages.length] }} />
                   {shortStage(label)}
                 </span>
               ))}
@@ -181,11 +192,11 @@ export function CommandView({ report, config, mode, onMode, onMinJobs, selectedC
           {chartMode === 'avg' && (
             <div className="legend">
               <span>
-                <i style={{ background: '#8ec9ff' }} />
+                <i style={{ background: palette.avg }} />
                 Average
               </span>
               <span>
-                <i style={{ background: '#f0b429' }} />
+                <i style={{ background: palette.median }} />
                 Median
               </span>
             </div>
@@ -200,8 +211,9 @@ export function CommandView({ report, config, mode, onMode, onMinJobs, selectedC
               <h2>Negative timestamps</h2>
             </div>
           </div>
-          <p className="hint">
-            A job is flagged when any stage, or the total, runs more than 15 minutes backward. Crews below have more than two of those jobs in the same month.
+          <p className="quality-note">
+            A job is flagged when any stage, or the total, runs more than 15 minutes backward. Crews below have more than
+            two of those jobs in the same month.
           </p>
           {report.flags.length === 0 ? (
             <p className="empty">No crew has more than 2 negative-timestamp jobs in any single month.</p>
@@ -251,6 +263,8 @@ function CrewRow({
   stageLabels,
   selected,
   onSelect,
+  rankFast,
+  rankSlow,
 }: {
   row: CrewSummaryRow
   index: number
@@ -259,6 +273,8 @@ function CrewRow({
   stageLabels: string[]
   selected: boolean
   onSelect: () => void
+  rankFast: string
+  rankSlow: string
 }) {
   const thin = row.jobs < 20
   const skewed = row.jobs >= 5 && row.median > 0 && row.avg > row.median * 1.4
@@ -269,13 +285,21 @@ function CrewRow({
         <div>
           <strong>{row.crew}</strong>
           <span className="bar-track">
-            <span className="bar-fill" style={{ width: `${Math.max(4, (row.avg / maxAvg) * 100)}%`, background: rankColor(index, count) }} />
+            <span
+              className="bar-fill"
+              style={{ width: `${Math.max(4, (row.avg / maxAvg) * 100)}%`, background: rankColor(index, count, rankFast, rankSlow) }}
+            />
           </span>
           <small>
-            avg {formatDuration(row.avg)} · med {formatDuration(row.median)} · {formatInt(row.jobs)} {row.jobs === 1 ? 'job' : 'jobs'}
-            {thin ? ' · thin sample' : ''}
-            {skewed ? ' · avg pulled by long jobs' : ''}
+            avg {formatDuration(row.avg)} · med {formatDuration(row.median)} · {formatInt(row.jobs)}{' '}
+            {row.jobs === 1 ? 'job' : 'jobs'}
           </small>
+          {(thin || skewed) && (
+            <span className="crew-tags">
+              {thin && <span className="tag warn">Thin sample</span>}
+              {skewed && <span className="tag warn">Long-job skew</span>}
+            </span>
+          )}
         </div>
         <b>{formatDuration(row.avg)}</b>
       </button>
@@ -293,12 +317,33 @@ function CrewRow({
   )
 }
 
-function rankColor(index: number, count: number): string {
+function rankColor(index: number, count: number, fast: string, slow: string): string {
   const t = count <= 1 ? 0 : index / (count - 1)
-  const r = Math.round(46 + (255 - 46) * t)
-  const g = Math.round(230 + (90 - 230) * t)
-  const b = Math.round(199 + (106 - 199) * t)
-  return `rgb(${r}, ${g}, ${b})`
+  const a = parseRgb(fast)
+  const b = parseRgb(slow)
+  if (!a || !b) return fast
+  const r = Math.round(a.r + (b.r - a.r) * t)
+  const g = Math.round(a.g + (b.g - a.g) * t)
+  const bl = Math.round(a.b + (b.b - a.b) * t)
+  return `rgb(${r}, ${g}, ${bl})`
+}
+
+function parseRgb(color: string): { r: number; g: number; b: number } | null {
+  const hex = color.trim()
+  if (hex.startsWith('#') && (hex.length === 7 || hex.length === 4)) {
+    const full =
+      hex.length === 4
+        ? `#${hex[1]}${hex[1]}${hex[2]}${hex[2]}${hex[3]}${hex[3]}`
+        : hex
+    return {
+      r: Number.parseInt(full.slice(1, 3), 16),
+      g: Number.parseInt(full.slice(3, 5), 16),
+      b: Number.parseInt(full.slice(5, 7), 16),
+    }
+  }
+  const match = hex.match(/rgba?\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)/i)
+  if (!match) return null
+  return { r: Number(match[1]), g: Number(match[2]), b: Number(match[3]) }
 }
 
 function SummaryTable({ rows, stageLabels }: { rows: CrewSummaryRow[]; stageLabels: string[] }) {
@@ -341,6 +386,7 @@ function ChartBody({
   stageLabels,
   weatherCol,
   highlight,
+  palette,
 }: {
   mode: ChartMode
   rows: CrewSummaryRow[]
@@ -348,6 +394,7 @@ function ChartBody({
   stageLabels: string[]
   weatherCol: string
   highlight: string | null
+  palette: ReturnType<typeof themePalette>
 }) {
   if (mode === 'weather') {
     if (weatherCol === 'none') return <p className="empty">Pick a breakdown column in Filters. Weather Condition is the usual one.</p>
@@ -355,14 +402,20 @@ function ChartBody({
     return (
       <GroupedBars
         categories={weather.map((item) => displayValue(item.label))}
-        series={[{ name: 'Average', color: '#2ee6c7', values: weather.map((item) => item.avg) }]}
+        series={[{ name: 'Average', color: palette.weather, values: weather.map((item) => item.avg) }]}
       />
     )
   }
   if (rows.length === 0) return <p className="empty">No crews to chart.</p>
   const categories = rows.map((row) => row.crew)
   if (mode === 'total') {
-    return <GroupedBars categories={categories} highlight={highlight} series={[{ name: 'Average', color: '#8ec9ff', values: rows.map((row) => row.avg) }]} />
+    return (
+      <GroupedBars
+        categories={categories}
+        highlight={highlight}
+        series={[{ name: 'Average', color: palette.avg, values: rows.map((row) => row.avg) }]}
+      />
+    )
   }
   if (mode === 'avg') {
     return (
@@ -370,8 +423,8 @@ function ChartBody({
         categories={categories}
         highlight={highlight}
         series={[
-          { name: 'Average', color: '#8ec9ff', values: rows.map((row) => row.avg) },
-          { name: 'Median', color: '#f0b429', values: rows.map((row) => row.median) },
+          { name: 'Average', color: palette.avg, values: rows.map((row) => row.avg) },
+          { name: 'Median', color: palette.median, values: rows.map((row) => row.median) },
         ]}
       />
     )
@@ -382,7 +435,7 @@ function ChartBody({
       highlight={highlight}
       series={stageLabels.map((label, index) => ({
         name: shortStage(label),
-        color: STAGE_COLORS[index % STAGE_COLORS.length],
+        color: palette.stages[index % palette.stages.length],
         values: rows.map((row) => Math.max(0, row.stageAvgs[index] ?? 0)),
       }))}
     />

@@ -5,6 +5,7 @@ import { defaultConfig } from './lib/defaults'
 import { filterRows, valueCounts } from './lib/rows'
 import { buildCrewReport } from './lib/crew'
 import { displayValue, formatInt } from './lib/format'
+import { applyTheme, readTheme, THEMES, type ThemeId } from './lib/theme'
 import { CommandView } from './views/CommandView'
 import { RosterView } from './views/RosterView'
 import { StatsView } from './views/StatsView'
@@ -25,6 +26,11 @@ export function App() {
   const [drawer, setDrawer] = useState(false)
   const [mode, setMode] = useState<CleaningMode>('cleaned')
   const [selectedCrew, setSelectedCrew] = useState<string | null>(null)
+  const [theme, setTheme] = useState<ThemeId>(() => readTheme())
+
+  useEffect(() => {
+    applyTheme(theme)
+  }, [theme])
 
   useEffect(() => {
     const controller = new AbortController()
@@ -121,9 +127,24 @@ export function App() {
           {table && <span>{formatInt(workingRows.length)} rows</span>}
           <Clock />
         </div>
-        <button type="button" className="solid" onClick={() => setDrawer(true)} disabled={!ready}>
-          Filters
-        </button>
+        <div className="top-actions">
+          <div className="theme-switcher" role="group" aria-label="Color theme">
+            {THEMES.map((item) => (
+              <button
+                key={item.id}
+                type="button"
+                title={item.hint}
+                aria-pressed={theme === item.id}
+                onClick={() => setTheme(item.id)}
+              >
+                {item.label}
+              </button>
+            ))}
+          </div>
+          <button type="button" className="solid" onClick={() => setDrawer(true)} disabled={!ready}>
+            Filters
+          </button>
+        </div>
       </header>
 
       {ready && config && globalOptions.length > 0 && globalOptions.length <= 24 && (
