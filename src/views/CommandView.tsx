@@ -135,24 +135,28 @@ export function CommandView({
               <small>only negative totals removed</small>
             </button>
           </div>
-        </div>
-        <div className="seg-block">
-          <p className="toolbar-tip-row">
-            <LabelHint tip="minJobs" label="About minimum jobs">
-              Minimum jobs
-            </LabelHint>
-          </p>
-          <div className="seg" role="group" aria-label="Minimum jobs">
-            {[1, 10, 20, 50].map((value) => (
-              <button key={value} type="button" aria-pressed={config.minJobs === value} onClick={() => onMinJobs(value)}>
-                {value === 1 ? 'Min 1' : `${value}+`}
-              </button>
-            ))}
+          <div className="sample-floor">
+            <div className="sample-floor-copy">
+              <LabelHint tip="minJobs" label="About sample floor">
+                Sample floor
+              </LabelHint>
+              <span className="sample-floor-note">Hide crews below this job count</span>
+            </div>
+            <div className="sample-floor-pills" role="group" aria-label="Sample floor">
+              {[1, 10, 20, 50].map((value) => (
+                <button
+                  key={value}
+                  type="button"
+                  className={config.minJobs === value ? 'sample-pill on' : 'sample-pill'}
+                  aria-pressed={config.minJobs === value}
+                  onClick={() => onMinJobs(value)}
+                >
+                  {value === 1 ? 'Any' : `${value}+`}
+                </button>
+              ))}
+            </div>
           </div>
         </div>
-        <button type="button" className="ghost" onClick={download} disabled={rows.length === 0}>
-          Download CSV
-        </button>
       </div>
 
       {report.error && <p className="banner">{report.error}</p>}
@@ -205,9 +209,14 @@ export function CommandView({
               <p className="kicker">Total time</p>
               <h2>Fastest to slowest</h2>
             </div>
-            <button type="button" className="text-btn" onClick={() => setShowTable((open) => !open)}>
-              {showTable ? 'Hide numbers' : 'Stage numbers'}
-            </button>
+            <div className="panel-actions">
+              <button type="button" className="text-btn" onClick={() => setShowTable((open) => !open)}>
+                {showTable ? 'Hide numbers' : 'Stage numbers'}
+              </button>
+              <button type="button" className="text-btn" onClick={download} disabled={rows.length === 0}>
+                Export CSV
+              </button>
+            </div>
           </div>
           {rows.length === 0 ? (
             <p className="empty">Nothing to rank with these filters.</p>

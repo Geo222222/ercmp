@@ -23,7 +23,7 @@ export const HELP = {
     'Raw clocks keep per-stage quirks. Only jobs with a negative overall total are removed, then the slowest 1% by total time — closer to the earlier, simpler board.',
 
   minJobs:
-    'Hide crews with fewer than this many jobs on the board so thin samples do not dominate the ranking.',
+    'Sample floor hides crews with fewer jobs than this on the current board, so thin samples do not dominate the ranking. “Any” keeps every crew.',
 
   stageOrder:
     'Pick timestamp columns in order from earliest stage to latest (e.g. Assigned → Acknowledge → Enroute → On-Site → Completed). Order drives every gap and total.',
