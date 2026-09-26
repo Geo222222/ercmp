@@ -6,8 +6,10 @@ Tablet command board for crew response times. It reads Excel workbooks, compares
 
 Drop month files here so the board can discover and compare them automatically:
 
-- **`data/`** (preferred) — e.g. `data/JULY - KSA.xlsx`
+- **`data/`** (preferred) — e.g. `data/JULY - KSA.xlsx` (synthetic July included for multi-month demos)
 - **Repo root** — e.g. `JUNE - KSA.xlsx` (already included)
+
+Regenerate the synthetic July file with `npm run generate:july` (needs Python + openpyxl).
 
 Names like `JUNE - KSA.xlsx` become month labels; if dates are in the sheet, the board also uses the timestamp range. In the running app you can **drag-and-drop** one or more `.xlsx` / `.xls` files onto the Months rail (or use Add Excel / Filters).
 
