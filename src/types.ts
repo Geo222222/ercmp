@@ -12,6 +12,36 @@ export type Dataset = {
   sheets: SheetGrid[]
 }
 
+/** Inclusive year-month span inferred from timestamp columns (YYYY-MM). */
+export type MonthRange = {
+  startYm: string | null
+  endYm: string | null
+}
+
+/**
+ * One loaded monthly workbook (or sheet period) on the board.
+ * Operators toggle `active` to include/exclude it from comparison.
+ */
+export type MonthDataset = {
+  id: string
+  label: string
+  fileName: string
+  sheets: SheetGrid[]
+  sheetName: string
+  headerRow: number
+  range: MonthRange
+  active: boolean
+}
+
+export type MonthSnapshot = {
+  id: string
+  label: string
+  fileName: string
+  range: MonthRange
+  rowCount: number
+  report: CrewReport
+}
+
 export type DataTable = {
   headers: string[]
   rows: Row[]

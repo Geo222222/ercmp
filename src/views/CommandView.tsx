@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useState } from 'react'
-import type { BoardConfig, CleaningMode, CrewReport, CrewSummaryRow, FlagRow } from '../types'
+import type { BoardConfig, CleaningMode, CrewReport, CrewSummaryRow, FlagRow, MonthSnapshot } from '../types'
 import { Briefing } from '../components/Briefing'
 import { GroupedBars } from '../components/GroupedBars'
 import { downloadCsv } from '../lib/download'
 import { dateStamp, displayValue, formatDuration, formatInt, shortStage } from '../lib/format'
+import { monthTone, rangeNote } from '../lib/excel'
 import { themePalette } from '../lib/theme'
 
 type ChartMode = 'stages' | 'avg' | 'total' | 'weather'
@@ -16,6 +17,8 @@ type Props = {
   onMinJobs: (minJobs: number) => void
   selectedCrew: string | null
   onSelectCrew: (crew: string | null) => void
+  /** Per-active-month reports for side-by-side comparison (1 = single-month mode). */
+  monthSnapshots?: MonthSnapshot[]
 }
 
 type Severity = 'critical' | 'high' | 'watch'
@@ -32,7 +35,16 @@ function severityLabel(severity: Severity): string {
   return 'Watch'
 }
 
-export function CommandView({ report, config, mode, onMode, onMinJobs, selectedCrew, onSelectCrew }: Props) {
+export function CommandView({
+  report,
+  config,
+  mode,
+  onMode,
+  onMinJobs,
+  selectedCrew,
+  onSelectCrew,
+  monthSnapshots = [],
+}: Props) {
   const [chartMode, setChartMode] = useState<ChartMode>('stages')
   const [showTable, setShowTable] = useState(false)
   const [crewQuery, setCrewQuery] = useState('')
@@ -152,6 +164,10 @@ export function CommandView({ report, config, mode, onMode, onMinJobs, selectedC
           tone={report.flags.length ? 'warn' : 'good'}
         />
       </section>
+
+      {monthSnapshots.length > 1 && (
+        <MonthComparePanel snapshots={monthSnapshots} mode={mode} selectedCrew={selectedCrew} onSelectCrew={onSelectCrew} />
+      )}
 
       <div className="board">
         <Briefing
@@ -339,6 +355,159 @@ export function CommandView({ report, config, mode, onMode, onMinJobs, selectedC
       </div>
     </div>
   )
+}
+
+function MonthComparePanel({
+  snapshots,
+  mode,
+  selectedCrew,
+  onSelectCrew,
+}: {
+  snapshots: MonthSnapshot[]
+  mode: CleaningMode
+  selectedCrew: string | null
+  onSelectCrew: (crew: string | null) => void
+}) {
+  const crewRows = useMemo(() => buildCrewMonthMatrix(snapshots, mode), [snapshots, mode])
+
+  return (
+    <section className="panel month-compare" aria-label="Month comparison">
+      <div className="panel-head">
+        <div>
+          <p className="kicker">Month to month</p>
+          <h2>Compare periods</h2>
+        </div>
+        <span className="hint" style={{ margin: 0 }}>
+          {snapshots.length} months active
+        </span>
+      </div>
+
+      <div className="month-compare-grid">
+        {snapshots.map((snap, index) => {
+          const rows = mode === 'cleaned' ? snap.report.cleaned : snap.report.raw
+          const jobs = rows.reduce((sum, row) => sum + row.jobs, 0)
+          const fastest = rows[0]
+          const slowest = rows[rows.length - 1]
+          return (
+            <article
+              key={snap.id}
+              className="month-card"
+              style={{ ['--month-tone' as string]: monthTone(index) }}
+            >
+              <div className="month-card-head">
+                <strong>{snap.label}</strong>
+                <span>{rangeNote(snap.range)}</span>
+              </div>
+              <div className="month-card-metrics">
+                <p>
+                  <span>Jobs</span>
+                  <b>{formatInt(jobs)}</b>
+                </p>
+                <p>
+                  <span>Crews</span>
+                  <b>{formatInt(rows.length)}</b>
+                </p>
+                <p className="good">
+                  <span>Fastest</span>
+                  <b>{fastest ? formatDuration(fastest.avg) : '—'}</b>
+                </p>
+                <p className="bad">
+                  <span>Slowest</span>
+                  <b>{rows.length > 1 && slowest ? formatDuration(slowest.avg) : '—'}</b>
+                </p>
+                <p>
+                  <span>Flags</span>
+                  <b>{formatInt(snap.report.flags.length)}</b>
+                </p>
+              </div>
+              {fastest && (
+                <button type="button" className="text-btn" onClick={() => onSelectCrew(fastest.crew)}>
+                  Focus {fastest.crew}
+                </button>
+              )}
+            </article>
+          )
+        })}
+      </div>
+
+      {crewRows.length > 0 && snapshots.length >= 2 && (
+        <div className="table-scroll">
+          <table className="crew-month-table">
+            <thead>
+              <tr>
+                <th>Crew</th>
+                {snapshots.map((snap) => (
+                  <th key={snap.id} className="num">
+                    {snap.label}
+                  </th>
+                ))}
+                <th className="num">Δ first→last</th>
+              </tr>
+            </thead>
+            <tbody>
+              {crewRows.slice(0, 24).map((row) => {
+                const first = row.avgs[0]
+                const last = row.avgs[row.avgs.length - 1]
+                const delta = first != null && last != null ? last - first : null
+                return (
+                  <tr key={row.crew} className={selectedCrew === row.crew ? 'crew-hit' : undefined}>
+                    <td>
+                      <button type="button" className="crew-link" onClick={() => onSelectCrew(row.crew)}>
+                        {row.crew}
+                      </button>
+                    </td>
+                    {row.avgs.map((avg, index) => (
+                      <td key={snapshots[index]?.id ?? index} className="num">
+                        {avg == null ? '—' : formatDuration(avg)}
+                      </td>
+                    ))}
+                    <td className="num">
+                      {delta == null ? (
+                        '—'
+                      ) : (
+                        <span className={`month-delta ${delta > 0.5 ? 'up' : delta < -0.5 ? 'down' : 'flat'}`}>
+                          {delta > 0 ? '+' : ''}
+                          {delta.toFixed(1)}m
+                        </span>
+                      )}
+                    </td>
+                  </tr>
+                )
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </section>
+  )
+}
+
+function buildCrewMonthMatrix(snapshots: MonthSnapshot[], mode: CleaningMode) {
+  const crews = new Map<string, (number | null)[]>()
+  snapshots.forEach((snap, index) => {
+    const rows = mode === 'cleaned' ? snap.report.cleaned : snap.report.raw
+    const byCrew = new Map(rows.map((row) => [row.crew, row.avg]))
+    const allCrews = new Set([...crews.keys(), ...byCrew.keys()])
+    for (const crew of allCrews) {
+      const list = crews.get(crew) ?? Array.from({ length: snapshots.length }, () => null)
+      list[index] = byCrew.get(crew) ?? null
+      crews.set(crew, list)
+    }
+  })
+  return [...crews.entries()]
+    .map(([crew, avgs]) => ({ crew, avgs }))
+    .filter((row) => row.avgs.filter((v) => v != null).length >= 2)
+    .sort((a, b) => {
+      const aAvg = meanDefined(a.avgs)
+      const bAvg = meanDefined(b.avgs)
+      return aAvg - bAvg
+    })
+}
+
+function meanDefined(values: (number | null)[]): number {
+  const nums = values.filter((v): v is number => v != null)
+  if (nums.length === 0) return Number.POSITIVE_INFINITY
+  return nums.reduce((sum, v) => sum + v, 0) / nums.length
 }
 
 function Kpi({

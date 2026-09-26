@@ -1,0 +1,310 @@
+/* Multi-month strip + Command comparison — keep scoped so theme chrome can evolve elsewhere. */
+
+.month-rail {
+  display: grid;
+  gap: 10px;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  background:
+    linear-gradient(180deg, color-mix(in srgb, var(--panel) 88%, transparent), var(--panel)),
+    var(--panel);
+  box-shadow: inset 0 1px 0 color-mix(in srgb, var(--accent) 12%, transparent);
+}
+
+.month-rail-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px 16px;
+}
+
+.month-rail-head .kicker {
+  margin: 0;
+}
+
+.month-rail-head h2 {
+  margin: 0;
+  font-size: 15px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.month-rail-note {
+  margin: 0;
+  color: var(--muted);
+  font-size: 12px;
+  max-width: 42ch;
+}
+
+.month-rail-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+
+.month-chips {
+  display: flex;
+  flex-wrap: nowrap;
+  gap: 8px;
+  overflow-x: auto;
+  padding-bottom: 2px;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+}
+
+.month-chips::-webkit-scrollbar {
+  display: none;
+}
+
+.month-chip {
+  --month-chip-min: 44px;
+  display: inline-grid;
+  grid-template-columns: auto 1fr;
+  grid-template-rows: auto auto;
+  column-gap: 10px;
+  align-items: center;
+  min-height: var(--month-chip-min);
+  min-width: 7.5rem;
+  padding: 8px 12px;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  background: color-mix(in srgb, var(--bg) 70%, var(--panel));
+  color: var(--text);
+  text-align: left;
+  cursor: pointer;
+  touch-action: manipulation;
+  transition: border-color 120ms ease, background 120ms ease, box-shadow 120ms ease;
+}
+
+.month-chip:hover,
+.month-chip:focus-visible {
+  border-color: var(--line-strong);
+  outline: none;
+}
+
+.month-chip.on {
+  border-color: color-mix(in srgb, var(--accent) 65%, var(--line-strong));
+  background: color-mix(in srgb, var(--accent) 18%, var(--panel));
+  box-shadow: inset 3px 0 0 var(--accent);
+}
+
+.month-chip.focus {
+  outline: 2px solid color-mix(in srgb, var(--accent) 55%, transparent);
+  outline-offset: 1px;
+}
+
+.month-chip-swatch {
+  grid-row: 1 / span 2;
+  width: 10px;
+  height: 10px;
+  border-radius: 2px;
+  background: var(--month-tone, var(--accent));
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--month-tone, var(--accent)) 35%, transparent);
+}
+
+.month-chip strong {
+  font-size: 13px;
+  letter-spacing: 0.02em;
+  line-height: 1.2;
+}
+
+.month-chip small {
+  grid-column: 2;
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.2;
+}
+
+.month-chip[aria-pressed='false'] {
+  opacity: 0.62;
+}
+
+.month-chip[aria-pressed='false'] .month-chip-swatch {
+  opacity: 0.45;
+}
+
+.month-compare {
+  display: grid;
+  gap: 12px;
+}
+
+.month-compare-grid {
+  display: grid;
+  gap: 10px;
+  grid-template-columns: repeat(auto-fit, minmax(11.5rem, 1fr));
+}
+
+.month-card {
+  display: grid;
+  gap: 8px;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  background: color-mix(in srgb, var(--bg) 55%, var(--panel));
+  box-shadow: inset 3px 0 0 var(--month-tone, var(--accent));
+  min-height: 7.5rem;
+}
+
+.month-card-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.month-card-head strong {
+  font-size: 14px;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+}
+
+.month-card-head span {
+  color: var(--faint);
+  font-size: 11px;
+}
+
+.month-card-metrics {
+  display: grid;
+  gap: 6px;
+}
+
+.month-card-metrics p {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  margin: 0;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.month-card-metrics p b {
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+  font-weight: 650;
+}
+
+.month-card-metrics p.good b {
+  color: var(--good);
+}
+
+.month-card-metrics p.bad b {
+  color: var(--bad);
+}
+
+.crew-month-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+.crew-month-table th,
+.crew-month-table td {
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--line);
+  text-align: left;
+  white-space: nowrap;
+}
+
+.crew-month-table th {
+  color: var(--muted);
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  font-weight: 600;
+}
+
+.crew-month-table td.num,
+.crew-month-table th.num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.crew-month-table tr.crew-hit {
+  background: color-mix(in srgb, var(--accent) 10%, transparent);
+}
+
+.crew-month-table button.crew-link {
+  all: unset;
+  cursor: pointer;
+  color: var(--text);
+  font-weight: 650;
+  border-bottom: 1px dotted color-mix(in srgb, var(--accent) 50%, transparent);
+}
+
+.crew-month-table button.crew-link:hover,
+.crew-month-table button.crew-link:focus-visible {
+  color: var(--accent-ink);
+}
+
+.month-delta {
+  font-variant-numeric: tabular-nums;
+}
+
+.month-delta.up {
+  color: var(--bad);
+}
+
+.month-delta.down {
+  color: var(--good);
+}
+
+.month-delta.flat {
+  color: var(--muted);
+}
+
+.drawer-months {
+  display: grid;
+  gap: 8px;
+}
+
+.drawer-month-row {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  gap: 8px;
+  align-items: center;
+  padding: 8px;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  background: color-mix(in srgb, var(--bg) 40%, var(--panel));
+}
+
+.drawer-month-row.on {
+  border-color: color-mix(in srgb, var(--accent) 50%, var(--line));
+}
+
+.drawer-month-row input[type='text'] {
+  min-height: 40px;
+  width: 100%;
+}
+
+.drawer-month-meta {
+  grid-column: 2 / -1;
+  margin: 0;
+  color: var(--muted);
+  font-size: 11px;
+}
+
+@media (max-width: 720px) {
+  .month-chip {
+    min-width: 6.75rem;
+  }
+
+  .month-rail-note {
+    max-width: none;
+  }
+}
+
+.app.month-drop-active {
+  outline: 2px dashed color-mix(in srgb, var(--accent) 70%, transparent);
+  outline-offset: -6px;
+}
+
+.month-rail.drop-target {
+  border-color: color-mix(in srgb, var(--accent) 70%, var(--line-strong));
+  box-shadow:
+    inset 0 0 0 1px color-mix(in srgb, var(--accent) 35%, transparent),
+    0 0 0 4px color-mix(in srgb, var(--accent) 12%, transparent);
+}

@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import type { BoardConfig, Row } from '../types'
+import type { BoardConfig, MonthDataset, Row } from '../types'
 import { displayValue, formatInt } from '../lib/format'
+import { rangeNote } from '../lib/excel'
 import { valueCounts } from '../lib/rows'
 
 type Props = {
@@ -12,10 +13,17 @@ type Props = {
   headerRow: number
   fileName: string
   config: BoardConfig
+  months: MonthDataset[]
+  focusMonthId: string
+  onFocusMonth: (id: string) => void
+  onToggleMonth: (id: string) => void
+  onMonthLabel: (id: string, label: string) => void
+  onRemoveMonth: (id: string) => void
   onSheet: (name: string) => void
   onHeaderRow: (row: number) => void
   onChange: (patch: Partial<BoardConfig>) => void
   onUpload: (file: File) => void
+  onUploadMany: (files: File[]) => void
   onReset: () => void
   onClose: () => void
 }
@@ -61,22 +69,61 @@ export function FilterDrawer(props: Props) {
 
         <div className="drawer-body">
           <section className="field">
-            <span>Workbook</span>
-            <strong className="file-name">{props.fileName}</strong>
+            <span>Month library</span>
+            <p className="hint">Add monthly Excel files. Active months feed Command comparison. Focus month drives sheet/header below.</p>
+            <div className="drawer-months">
+              {props.months.map((month) => (
+                <div key={month.id} className={month.active ? 'drawer-month-row on' : 'drawer-month-row'}>
+                  <input
+                    type="checkbox"
+                    checked={month.active}
+                    aria-label={`Include ${month.label}`}
+                    onChange={() => props.onToggleMonth(month.id)}
+                  />
+                  <input
+                    type="text"
+                    value={month.label}
+                    aria-label={`Label for ${month.fileName}`}
+                    onFocus={() => props.onFocusMonth(month.id)}
+                    onChange={(event) => props.onMonthLabel(month.id, event.target.value)}
+                  />
+                  <button
+                    type="button"
+                    className="text-btn"
+                    disabled={props.months.length <= 1}
+                    onClick={() => props.onRemoveMonth(month.id)}
+                  >
+                    Remove
+                  </button>
+                  <p className="drawer-month-meta">
+                    {month.fileName} · {rangeNote(month.range)}
+                    {props.focusMonthId === month.id ? ' · editing' : ''}
+                  </p>
+                </div>
+              ))}
+            </div>
             <button type="button" className="solid" onClick={() => fileRef.current?.click()}>
-              Upload another Excel file
+              Upload month Excel…
             </button>
             <input
               ref={fileRef}
               type="file"
               accept=".xlsx,.xls"
+              multiple
               hidden
               onChange={(event) => {
-                const file = event.target.files?.[0]
-                if (file) props.onUpload(file)
+                const files = [...(event.target.files ?? [])]
+                if (files.length === 1) props.onUpload(files[0])
+                else if (files.length > 1) props.onUploadMany(files)
                 event.target.value = ''
               }}
             />
+          </section>
+
+          <section className="field">
+            <span>Focus workbook</span>
+            <strong className="file-name">{props.fileName}</strong>
+            <p className="hint">Sheet and header row apply to the focused month only.</p>
           </section>
 
           {props.sheets.length > 1 && (
