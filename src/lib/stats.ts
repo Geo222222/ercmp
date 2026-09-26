@@ -1,0 +1,318 @@
+import type { Row } from '../types'
+import { roundTo } from './format'
+import { asNumber, asText, categoricalColumns, numericColumns } from './rows'
+import { quantile } from './crew'
+
+export type NumericSummary = {
+  Variable: string
+  N: number
+  Missing: number
+  Mean: number | null
+  SD: number | null
+  Min: number | null
+  Q1: number | null
+  Median: number | null
+  Q3: number | null
+  Max: number | null
+}
+
+export type CategoricalSummary = {
+  Variable: string
+  N: number
+  Missing: number
+  UniqueValues: number
+  MostFrequent: string | null
+}
+
+function sampleSd(values: number[]): number | null {
+  if (values.length < 2) return null
+  const avg = values.reduce((sum, value) => sum + value, 0) / values.length
+  const squared = values.reduce((sum, value) => sum + (value - avg) ** 2, 0)
+  return Math.sqrt(squared / (values.length - 1))
+}
+
+function finite(values: number[]): number[] {
+  return values.filter((value) => Number.isFinite(value))
+}
+
+function summarizeNumeric(rows: Row[], column: string): NumericSummary {
+  const values: number[] = []
+  let missing = 0
+  for (const row of rows) {
+    const value = row[column]
+    if (value == null || value === '') {
+      missing += 1
+      continue
+    }
+    const parsed = asNumber(value)
+    if (parsed == null) missing += 1
+    else values.push(parsed)
+  }
+  const present = finite(values)
+  const rounded = (value: number) => roundTo(value, 3)
+  return {
+    Variable: column,
+    N: present.length,
+    Missing: missing,
+    Mean: present.length ? rounded(present.reduce((sum, value) => sum + value, 0) / present.length) : null,
+    SD: (() => {
+      const sd = sampleSd(present)
+      return sd == null ? null : rounded(sd)
+    })(),
+    Min: present.length ? rounded(Math.min(...present)) : null,
+    Q1: present.length ? rounded(quantile(present, 0.25)) : null,
+    Median: present.length ? rounded(quantile(present, 0.5)) : null,
+    Q3: present.length ? rounded(quantile(present, 0.75)) : null,
+    Max: present.length ? rounded(Math.max(...present)) : null,
+  }
+}
+
+function summarizeCategorical(rows: Row[], column: string): CategoricalSummary {
+  const counts = new Map<string, number>()
+  let missing = 0
+  for (const row of rows) {
+    const text = asText(row[column])
+    if (text == null) {
+      missing += 1
+      continue
+    }
+    counts.set(text, (counts.get(text) ?? 0) + 1)
+  }
+  let top: string | null = null
+  let topCount = -1
+  for (const [value, count] of counts) {
+    if (count > topCount) {
+      top = value
+      topCount = count
+    }
+  }
+  return {
+    Variable: column,
+    N: rows.length - missing,
+    Missing: missing,
+    UniqueValues: counts.size,
+    MostFrequent: top,
+  }
+}
+
+export function descriptiveStats(rows: Row[], columns: string[], groupCol: string): {
+  grouped: Record<string, string | number | null>[] | null
+  numeric: NumericSummary[]
+  categorical: CategoricalSummary[]
+} {
+  const numeric = numericColumns(columns, rows)
+  const categorical = categoricalColumns(columns, rows).filter((column) => column !== groupCol)
+
+  if (groupCol !== 'none' && numeric.length > 0) {
+    const groups = new Map<string, Row[]>()
+    for (const row of rows) {
+      const key = asText(row[groupCol]) ?? 'Unknown'
+      const list = groups.get(key)
+      if (list) list.push(row)
+      else groups.set(key, [row])
+    }
+    const grouped = [...groups.entries()].map(([group, groupRows]) => {
+      const record: Record<string, string | number | null> = { [groupCol]: group }
+      for (const column of numeric) {
+        const summary = summarizeNumeric(groupRows, column)
+        record[`${column}_N`] = summary.N
+        record[`${column}_Mean`] = summary.Mean
+        record[`${column}_SD`] = summary.SD
+        record[`${column}_Median`] = summary.Median
+      }
+      return record
+    })
+    return { grouped, numeric: [], categorical: [] }
+  }
+
+  return {
+    grouped: null,
+    numeric: numeric.map((column) => summarizeNumeric(rows, column)),
+    categorical: categorical.map((column) => summarizeCategorical(rows, column)),
+  }
+}
+
+export type HistModel = { column: string; bins: { label: string; n: number }[] }
+export type BoxGroup = {
+  name: string
+  low: number
+  q1: number
+  median: number
+  q3: number
+  high: number
+  outliers: number[]
+}
+export type BoxModel = { column: string; groups: BoxGroup[] }
+export type BarModel = { column: string; items: { label: string; n: number }[]; hidden: number }
+export type ScatterModel = {
+  xCol: string
+  yCol: string
+  points: { x: number; y: number }[]
+  slope: number
+  intercept: number
+  hidden: number
+}
+export type CorrModel = { labels: string[]; matrix: (number | null)[][] }
+
+function columnNumbers(rows: Row[], column: string): number[] {
+  const values: number[] = []
+  for (const row of rows) {
+    const parsed = asNumber(row[column])
+    if (parsed != null) values.push(parsed)
+  }
+  return values
+}
+
+export function histogram(rows: Row[], column: string): HistModel | null {
+  const values = columnNumbers(rows, column)
+  if (values.length === 0) return null
+  const min = Math.min(...values)
+  const max = Math.max(...values)
+  const bins = 30
+  const width = max === min ? 1 : (max - min) / bins
+  const counts = Array.from({ length: bins }, () => 0)
+  for (const value of values) {
+    let index = Math.floor((value - min) / width)
+    if (index >= bins) index = bins - 1
+    if (index < 0) index = 0
+    counts[index] += 1
+  }
+  return {
+    column,
+    bins: counts.map((n, index) => ({
+      label: (min + index * width).toFixed(max - min > 10 ? 0 : 1),
+      n,
+    })),
+  }
+}
+
+export function boxplot(rows: Row[], column: string, groupCol: string): BoxModel | null {
+  const buckets = new Map<string, number[]>()
+  for (const row of rows) {
+    const value = asNumber(row[column])
+    if (value == null) continue
+    const name = groupCol === 'none' ? column : (asText(row[groupCol]) ?? 'Unknown')
+    const list = buckets.get(name)
+    if (list) list.push(value)
+    else buckets.set(name, [value])
+  }
+  if (buckets.size === 0) return null
+
+  const groups: BoxGroup[] = [...buckets.entries()].map(([name, values]) => {
+    const sorted = [...values].sort((a, b) => a - b)
+    const q1 = quantile(sorted, 0.25)
+    const q3 = quantile(sorted, 0.75)
+    const med = quantile(sorted, 0.5)
+    const iqr = q3 - q1
+    const fenceLow = q1 - 1.5 * iqr
+    const fenceHigh = q3 + 1.5 * iqr
+    const inside = sorted.filter((value) => value >= fenceLow && value <= fenceHigh)
+    const outliers = sorted.filter((value) => value < fenceLow || value > fenceHigh).slice(0, 40)
+    return {
+      name,
+      low: inside[0] ?? sorted[0],
+      q1,
+      median: med,
+      q3,
+      high: inside[inside.length - 1] ?? sorted[sorted.length - 1],
+      outliers,
+    }
+  })
+
+  groups.sort((a, b) => b.median - a.median)
+  return { column, groups: groups.slice(0, 24) }
+}
+
+export function barCounts(rows: Row[], column: string): BarModel | null {
+  const counts = new Map<string, number>()
+  for (const row of rows) {
+    const text = asText(row[column])
+    if (text == null) continue
+    counts.set(text, (counts.get(text) ?? 0) + 1)
+  }
+  const items = [...counts.entries()]
+    .map(([label, n]) => ({ label, n }))
+    .sort((a, b) => b.n - a.n)
+  if (items.length === 0) return null
+  return { column, items: items.slice(0, 24), hidden: Math.max(0, items.length - 24) }
+}
+
+function regression(points: { x: number; y: number }[]): { slope: number; intercept: number } {
+  const n = points.length
+  let sx = 0
+  let sy = 0
+  let sxx = 0
+  let sxy = 0
+  for (const point of points) {
+    sx += point.x
+    sy += point.y
+    sxx += point.x * point.x
+    sxy += point.x * point.y
+  }
+  const denominator = n * sxx - sx * sx
+  if (denominator === 0) return { slope: 0, intercept: n ? sy / n : 0 }
+  const slope = (n * sxy - sx * sy) / denominator
+  return { slope, intercept: (sy - slope * sx) / n }
+}
+
+export function scatter(rows: Row[], xCol: string, yCol: string): ScatterModel | null {
+  const points: { x: number; y: number }[] = []
+  for (const row of rows) {
+    const x = asNumber(row[xCol])
+    const y = asNumber(row[yCol])
+    if (x == null || y == null) continue
+    points.push({ x, y })
+  }
+  if (points.length < 2) return null
+  const fit = regression(points)
+  const cap = 5000
+  return {
+    xCol,
+    yCol,
+    points: points.length > cap ? points.filter((_, index) => index % Math.ceil(points.length / cap) === 0) : points,
+    slope: fit.slope,
+    intercept: fit.intercept,
+    hidden: Math.max(0, points.length - cap),
+  }
+}
+
+function pearson(xs: number[], ys: number[]): number | null {
+  const n = xs.length
+  if (n < 2) return null
+  let sx = 0
+  let sy = 0
+  let sxx = 0
+  let syy = 0
+  let sxy = 0
+  for (let i = 0; i < n; i += 1) {
+    sx += xs[i]
+    sy += ys[i]
+    sxx += xs[i] * xs[i]
+    syy += ys[i] * ys[i]
+    sxy += xs[i] * ys[i]
+  }
+  const denominator = Math.sqrt((n * sxx - sx * sx) * (n * syy - sy * sy))
+  if (denominator === 0) return null
+  return (n * sxy - sx * sy) / denominator
+}
+
+export function correlation(rows: Row[], columns: string[]): CorrModel | null {
+  const labels = numericColumns(columns, rows)
+  if (labels.length < 2) return null
+  const series = labels.map((column) => rows.map((row) => asNumber(row[column])))
+  const matrix = labels.map((_, rowIndex) =>
+    labels.map((__, colIndex) => {
+      const xs: number[] = []
+      const ys: number[] = []
+      for (let i = 0; i < rows.length; i += 1) {
+        const x = series[rowIndex][i]
+        const y = series[colIndex][i]
+        if (x == null || y == null) continue
+        xs.push(x)
+        ys.push(y)
+      }
+      return pearson(xs, ys)
+    }),
+  )
+  return { labels, matrix }
+}

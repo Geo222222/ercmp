@@ -1,0 +1,765 @@
+# ============================================================
+# Excel Data Analyzer — R Shiny Desktop App
+# Upload an Excel file, choose what to analyze, get descriptive
+# statistics and visualizations based on your selections.
+# ============================================================
+
+# ---- Required packages ----
+required_packages <- c("shiny", "readxl", "ggplot2", "DT", "dplyr",
+                       "tidyr", "corrplot", "shinythemes", "lubridate")
+
+installed <- rownames(installed.packages())
+missing_pkgs <- setdiff(required_packages, installed)
+if (length(missing_pkgs) > 0) {
+  install.packages(missing_pkgs, repos = "https://cloud.r-project.org")
+}
+
+library(shiny)
+library(readxl)
+library(ggplot2)
+library(DT)
+library(dplyr)
+library(tidyr)
+library(corrplot)
+library(shinythemes)
+library(lubridate)
+
+# Try several common timestamp formats until one parses. Handles strings
+# like "Jul 31, 2026 11:58pm" as well as more standard formats. Returns
+# POSIXct; values that fail every format become NA.
+parse_flexible_datetime <- function(x) {
+  if (inherits(x, "POSIXct") || inherits(x, "Date")) return(as.POSIXct(x))
+  suppressWarnings(
+    parse_date_time(x, orders = c("bdy IMp", "bdy HM", "mdy IMp", "mdy HM",
+                                  "ymd HMS", "ymd HM", "dmy HM", "dmy IMp"))
+  )
+}
+
+# ============================================================
+# UI
+# ============================================================
+ui <- fluidPage(
+  theme = shinytheme("flatly"),
+  titlePanel("Excel Data Analyzer"),
+  sidebarLayout(
+    sidebarPanel(
+      width = 3,
+      fileInput("file", "Upload Excel file", accept = c(".xlsx", ".xls")),
+      uiOutput("sheet_selector"),
+      numericInput("header_row", "Header row number (row with column names)",
+                   value = 1, min = 1, step = 1),
+      helpText("If your sheet has title rows or blank rows before the ",
+               "column headers, set this to the row number the headers ",
+               "are actually on."),
+      hr(),
+      h4("Filter Data (applies to every tab)"),
+      uiOutput("global_filter_col_selector"),
+      uiOutput("global_filter_val_selector"),
+      hr(),
+      h4("General Analysis"),
+      uiOutput("column_selector"),
+      uiOutput("group_selector"),
+      hr(),
+      h4("Chart"),
+      selectInput("chart_type", "Chart type",
+                  choices = c("None" = "none",
+                              "Histogram" = "hist",
+                              "Boxplot" = "box",
+                              "Bar chart (categorical counts)" = "bar",
+                              "Scatter plot (2 numeric vars)" = "scatter",
+                              "Correlation heatmap (all numeric vars)" = "corr")),
+      uiOutput("scatter_selectors"),
+      hr(),
+      downloadButton("download_stats", "Download stats (CSV)"),
+      br(), br(),
+      downloadButton("download_plot", "Download chart (PNG)"),
+      hr(),
+      h4("Crew / Response-Time Performance"),
+      helpText("Pick the timestamp columns IN ORDER from earliest stage ",
+               "to latest (e.g. Assigned, Acknowledge, Enroute, On-Site, ",
+               "Completed). Click them in that order in the box below."),
+      uiOutput("stage_col_selector"),
+      uiOutput("crew_col_selector"),
+      uiOutput("crew_names_selector"),
+      uiOutput("filter_col_selector"),
+      uiOutput("filter_val_selector"),
+      uiOutput("weather_col_selector"),
+      numericInput("min_jobs", "Minimum jobs per crew to include", value = 1, min = 1),
+      actionButton("run_crew_analysis", "Compare Crews", class = "btn-primary"),
+      br(), br(),
+      downloadButton("download_crew_stats", "Download crew comparison (CSV)")
+    ),
+    mainPanel(
+      width = 9,
+      tabsetPanel(
+        tabPanel("Data Preview", DTOutput("data_preview")),
+        tabPanel("Descriptive Stats", DTOutput("stats_table")),
+        tabPanel("Chart", plotOutput("chart", height = "550px")),
+        tabPanel("Crew Performance",
+                 h4("Narrative Summary"),
+                 uiOutput("crew_narrative"),
+                 hr(),
+                 h4("Summary table (negative-timestamp jobs excluded)"),
+                 DTOutput("crew_stats_table"),
+                 hr(),
+                 h4("Summary table (raw timestamps, negative-total jobs only removed \u2014 matches the earlier version)"),
+                 uiOutput("crew_narrative_with_negative"),
+                 DTOutput("crew_stats_table_with_negative"),
+                 hr(),
+                 h4("Total time comparison (Assigned to Completed)"),
+                 plotOutput("crew_total_chart", height = "450px"),
+                 hr(),
+                 h4("Average vs. median (spots crews skewed by a few outlier jobs)"),
+                 plotOutput("crew_avg_median_chart", height = "400px"),
+                 hr(),
+                 h4("Where the time goes: stage breakdown by crew"),
+                 plotOutput("crew_stage_chart", height = "450px"),
+                 hr(),
+                 h4("Weather impact (selected crews only, if weather column chosen)"),
+                 plotOutput("crew_weather_chart", height = "400px"),
+                 hr(),
+                 h4("Data-quality flag: crews with more than 2 negative-timestamp jobs in a month"),
+                 DTOutput("crew_negative_flags_table"))
+      )
+    )
+  )
+)
+
+# ============================================================
+# SERVER
+# ============================================================
+server <- function(input, output, session) {
+  
+  # ---- Load workbook sheet names once a file is uploaded ----
+  sheet_names <- reactive({
+    req(input$file)
+    excel_sheets(input$file$datapath)
+  })
+  
+  output$sheet_selector <- renderUI({
+    req(sheet_names())
+    selectInput("sheet", "Sheet", choices = sheet_names())
+  })
+  
+  # ---- Read the selected sheet ----
+  raw_data <- reactive({
+    req(input$file, input$sheet)
+    header_row <- input$header_row
+    if (is.null(header_row) || is.na(header_row)) header_row <- 1
+    skip_n <- max(0, header_row - 1)
+    read_excel(input$file$datapath, sheet = input$sheet, skip = skip_n)
+  })
+  
+  # ---- Global filter (e.g. Parish = KSAN, KSAS, St.Thomas) ----
+  # Applies everywhere: Data Preview, Descriptive Stats, Chart, and
+  # Crew Performance all read from working_data(), not raw_data().
+  output$global_filter_col_selector <- renderUI({
+    req(raw_data())
+    guess <- names(raw_data())[grepl("parish|region|area", names(raw_data()), ignore.case = TRUE)]
+    selectInput("global_filter_col", "Filter by column",
+                choices = c("None" = "none", names(raw_data())),
+                selected = if (length(guess) > 0) guess[1] else "none")
+  })
+  
+  output$global_filter_val_selector <- renderUI({
+    req(input$global_filter_col, input$global_filter_col != "none", raw_data())
+    vals <- sort(unique(na.omit(raw_data()[[input$global_filter_col]])))
+    selectizeInput("global_filter_vals", "Values to include",
+                   choices = vals, multiple = TRUE,
+                   options = list(placeholder = "Leave empty = include all"))
+  })
+  
+  working_data <- reactive({
+    req(raw_data())
+    df <- raw_data()
+    if (!is.null(input$global_filter_col) && input$global_filter_col != "none" &&
+        !is.null(input$global_filter_vals) && length(input$global_filter_vals) > 0) {
+      df <- df[df[[input$global_filter_col]] %in% input$global_filter_vals, ]
+    }
+    df
+  })
+  
+  numeric_cols <- reactive({
+    req(working_data())
+    names(working_data())[sapply(working_data(), is.numeric)]
+  })
+  
+  categorical_cols <- reactive({
+    req(working_data())
+    names(working_data())[sapply(working_data(), function(x) is.character(x) || is.factor(x))]
+  })
+  
+  # ---- Dynamic column selector for analysis ----
+  output$column_selector <- renderUI({
+    req(working_data())
+    selectInput("analysis_cols", "Columns to summarize",
+                choices = names(working_data()),
+                selected = numeric_cols(),
+                multiple = TRUE)
+  })
+  
+  # ---- Optional grouping variable ----
+  output$group_selector <- renderUI({
+    req(working_data())
+    selectInput("group_col", "Group by (optional)",
+                choices = c("None" = "none", categorical_cols()),
+                selected = "none")
+  })
+  
+  # ---- Extra selectors needed only for scatter plots ----
+  output$scatter_selectors <- renderUI({
+    req(input$chart_type == "scatter", numeric_cols())
+    tagList(
+      selectInput("scatter_x", "X variable", choices = numeric_cols()),
+      selectInput("scatter_y", "Y variable", choices = numeric_cols(),
+                  selected = numeric_cols()[min(2, length(numeric_cols()))])
+    )
+  })
+  
+  # ---- Data preview ----
+  output$data_preview <- renderDT({
+    req(working_data())
+    datatable(working_data(), options = list(scrollX = TRUE, pageLength = 10))
+  })
+  
+  # ---- Descriptive statistics ----
+  stats_result <- reactive({
+    req(working_data(), input$analysis_cols)
+    df <- working_data()
+    cols <- intersect(input$analysis_cols, names(df))
+    num_cols <- intersect(cols, numeric_cols())
+    cat_cols <- intersect(cols, categorical_cols())
+    
+    summarize_numeric <- function(data, cols) {
+      if (length(cols) == 0) return(NULL)
+      do.call(rbind, lapply(cols, function(cn) {
+        v <- data[[cn]]
+        data.frame(
+          Variable = cn,
+          N = sum(!is.na(v)),
+          Missing = sum(is.na(v)),
+          Mean = round(mean(v, na.rm = TRUE), 3),
+          SD = round(sd(v, na.rm = TRUE), 3),
+          Min = round(min(v, na.rm = TRUE), 3),
+          Q1 = round(quantile(v, 0.25, na.rm = TRUE), 3),
+          Median = round(median(v, na.rm = TRUE), 3),
+          Q3 = round(quantile(v, 0.75, na.rm = TRUE), 3),
+          Max = round(max(v, na.rm = TRUE), 3),
+          stringsAsFactors = FALSE
+        )
+      }))
+    }
+    
+    if (!is.null(input$group_col) && input$group_col != "none" && length(num_cols) > 0) {
+      grp <- input$group_col
+      out <- df %>%
+        group_by(across(all_of(grp))) %>%
+        summarise(across(all_of(num_cols),
+                         list(N = ~sum(!is.na(.)),
+                              Mean = ~round(mean(., na.rm = TRUE), 3),
+                              SD = ~round(sd(., na.rm = TRUE), 3),
+                              Median = ~round(median(., na.rm = TRUE), 3)),
+                         .names = "{.col}_{.fn}"),
+                  .groups = "drop")
+      return(as.data.frame(out))
+    }
+    
+    numeric_summary <- summarize_numeric(df, num_cols)
+    
+    cat_summary <- NULL
+    if (length(cat_cols) > 0) {
+      cat_summary <- do.call(rbind, lapply(cat_cols, function(cn) {
+        tab <- sort(table(df[[cn]]), decreasing = TRUE)
+        top <- if (length(tab) > 0) names(tab)[1] else NA
+        data.frame(
+          Variable = cn,
+          N = sum(!is.na(df[[cn]])),
+          Missing = sum(is.na(df[[cn]])),
+          UniqueValues = length(unique(na.omit(df[[cn]]))),
+          MostFrequent = top,
+          stringsAsFactors = FALSE
+        )
+      }))
+    }
+    
+    list(numeric = numeric_summary, categorical = cat_summary)
+  })
+  
+  output$stats_table <- renderDT({
+    res <- stats_result()
+    if (is.data.frame(res)) {
+      datatable(res, options = list(scrollX = TRUE))
+    } else {
+      combined <- res$numeric
+      if (!is.null(res$categorical)) {
+        # show numeric and categorical summaries stacked with a type marker
+        if (!is.null(combined)) combined$Type <- "Numeric"
+        catc <- res$categorical
+        catc$Type <- "Categorical"
+        combined <- bind_rows(combined, catc)
+      }
+      req(combined)
+      datatable(combined, options = list(scrollX = TRUE))
+    }
+  })
+  
+  # ---- Chart rendering ----
+  build_plot <- function() {
+    req(working_data(), input$chart_type != "none")
+    df <- working_data()
+    cols <- input$analysis_cols
+    
+    if (input$chart_type == "hist") {
+      req(length(intersect(cols, numeric_cols())) > 0)
+      col <- intersect(cols, numeric_cols())[1]
+      ggplot(df, aes(x = .data[[col]])) +
+        geom_histogram(bins = 30, fill = "#2C3E50", color = "white") +
+        labs(title = paste("Histogram of", col), x = col, y = "Count") +
+        theme_minimal(base_size = 14)
+      
+    } else if (input$chart_type == "box") {
+      num_sel <- intersect(cols, numeric_cols())
+      req(length(num_sel) > 0)
+      df_long <- df %>% select(all_of(num_sel)) %>%
+        pivot_longer(everything(), names_to = "Variable", values_to = "Value")
+      if (!is.null(input$group_col) && input$group_col != "none") {
+        df_long$Group <- rep(df[[input$group_col]], each = 1)[seq_len(nrow(df_long))]
+      }
+      ggplot(df_long, aes(x = Variable, y = Value)) +
+        geom_boxplot(fill = "#18BC9C") +
+        labs(title = "Boxplot", x = "", y = "") +
+        theme_minimal(base_size = 14)
+      
+    } else if (input$chart_type == "bar") {
+      cat_sel <- intersect(cols, categorical_cols())
+      req(length(cat_sel) > 0)
+      col <- cat_sel[1]
+      ggplot(df, aes(x = .data[[col]])) +
+        geom_bar(fill = "#E74C3C") +
+        labs(title = paste("Counts of", col), x = col, y = "Count") +
+        theme_minimal(base_size = 14) +
+        theme(axis.text.x = element_text(angle = 45, hjust = 1))
+      
+    } else if (input$chart_type == "scatter") {
+      req(input$scatter_x, input$scatter_y)
+      ggplot(df, aes(x = .data[[input$scatter_x]], y = .data[[input$scatter_y]])) +
+        geom_point(color = "#2980B9", alpha = 0.7, size = 2) +
+        geom_smooth(method = "lm", se = FALSE, color = "#E74C3C") +
+        labs(title = paste(input$scatter_y, "vs", input$scatter_x)) +
+        theme_minimal(base_size = 14)
+      
+    } else if (input$chart_type == "corr") {
+      num_df <- df %>% select(all_of(numeric_cols()))
+      req(ncol(num_df) >= 2)
+      cm <- cor(num_df, use = "pairwise.complete.obs")
+      corrplot(cm, method = "color", type = "upper",
+               addCoef.col = "black", tl.col = "black", number.cex = 0.8)
+    }
+  }
+  
+  output$chart <- renderPlot({
+    build_plot()
+  })
+  
+  # ---- Downloads ----
+  output$download_stats <- downloadHandler(
+    filename = function() paste0("descriptive_stats_", Sys.Date(), ".csv"),
+    content = function(file) {
+      res <- stats_result()
+      out <- if (is.data.frame(res)) res else bind_rows(
+        if (!is.null(res$numeric)) mutate(res$numeric, Type = "Numeric") else NULL,
+        if (!is.null(res$categorical)) mutate(res$categorical, Type = "Categorical") else NULL
+      )
+      write.csv(out, file, row.names = FALSE)
+    }
+  )
+  
+  output$download_plot <- downloadHandler(
+    filename = function() paste0("chart_", Sys.Date(), ".png"),
+    content = function(file) {
+      png(file, width = 1000, height = 700)
+      if (input$chart_type == "corr") {
+        build_plot()
+      } else {
+        print(build_plot())
+      }
+      dev.off()
+    }
+  )
+  
+  # ============================================================
+  # CREW / RESPONSE-TIME PERFORMANCE
+  # ============================================================
+  
+  # Pick timestamp columns in the order you click them (earliest to latest)
+  output$stage_col_selector <- renderUI({
+    req(working_data())
+    selectizeInput("stage_cols", "Timestamp columns (in order)",
+                   choices = names(working_data()), multiple = TRUE,
+                   options = list(placeholder = "Click columns in chronological order"))
+  })
+  
+  output$crew_col_selector <- renderUI({
+    req(working_data())
+    guess <- names(working_data())[grepl("crew|team|technician", names(working_data()), ignore.case = TRUE)]
+    selectInput("crew_col", "Column that identifies the crew/team",
+                choices = names(working_data()),
+                selected = if (length(guess) > 0) guess[1] else names(working_data())[1])
+  })
+  
+  crew_choices <- reactive({
+    req(working_data(), input$crew_col)
+    sort(unique(na.omit(working_data()[[input$crew_col]])))
+  })
+  
+  output$crew_names_selector <- renderUI({
+    req(crew_choices())
+    selectizeInput("crew_names", "Crews to compare (leave empty = all)",
+                   choices = crew_choices(), multiple = TRUE,
+                   options = list(placeholder = "Type or pick crew names"))
+  })
+  
+  # Optional extra filter column, on top of the global filter above, to
+  # narrow the crew comparison specifically (e.g. by Order Status)
+  output$filter_col_selector <- renderUI({
+    req(working_data())
+    selectInput("filter_col", "Optional extra filter column (e.g. Order Status)",
+                choices = c("None" = "none", names(working_data())))
+  })
+  
+  output$filter_val_selector <- renderUI({
+    req(input$filter_col, input$filter_col != "none", working_data())
+    vals <- sort(unique(na.omit(working_data()[[input$filter_col]])))
+    selectizeInput("filter_vals", "Values to include",
+                   choices = vals, multiple = TRUE,
+                   options = list(placeholder = "Leave empty = include all"))
+  })
+  
+  # Optional weather (or any other breakdown) column
+  output$weather_col_selector <- renderUI({
+    req(working_data())
+    guess <- names(working_data())[grepl("weather", names(working_data()), ignore.case = TRUE)]
+    selectInput("weather_col", "Optional breakdown column (e.g. Weather Condition)",
+                choices = c("None" = "none", names(working_data())),
+                selected = if (length(guess) > 0) guess[1] else "none")
+  })
+  
+  # Compute stage-to-stage and total durations (in minutes) once the user
+  # clicks "Compare Crews". Cleans out negative/extreme-outlier totals
+  # (bad timestamps) the same way you'd want to sanity-check by hand.
+  crew_analysis <- eventReactive(input$run_crew_analysis, {
+    req(working_data(), input$stage_cols, input$crew_col, length(input$stage_cols) >= 2)
+    df <- working_data()
+    
+    stage_cols <- input$stage_cols
+    for (col in stage_cols) {
+      df[[col]] <- parse_flexible_datetime(df[[col]])
+    }
+    
+    # Optional filter (e.g. Parish %in% c("KSAN","KSAS"))
+    if (!is.null(input$filter_col) && input$filter_col != "none" &&
+        !is.null(input$filter_vals) && length(input$filter_vals) > 0) {
+      df <- df[df[[input$filter_col]] %in% input$filter_vals, ]
+    }
+    
+    # Restrict to selected crews (empty selection = keep all)
+    if (!is.null(input$crew_names) && length(input$crew_names) > 0) {
+      df <- df[df[[input$crew_col]] %in% input$crew_names, ]
+    }
+    
+    # Stage-to-stage duration columns, named "<Stage A> -> <Stage B>"
+    stage_labels <- c()
+    for (i in seq_len(length(stage_cols) - 1)) {
+      lbl <- paste(stage_cols[i], "->", stage_cols[i + 1])
+      stage_labels <- c(stage_labels, lbl)
+      df[[lbl]] <- as.numeric(difftime(df[[stage_cols[i + 1]]], df[[stage_cols[i]]], units = "mins"))
+    }
+    df$TotalMinutes <- as.numeric(difftime(df[[stage_cols[length(stage_cols)]]],
+                                           df[[stage_cols[1]]], units = "mins"))
+    
+    # Drop rows with any missing stage/total time
+    keep_cols <- c(stage_labels, "TotalMinutes")
+    base_df <- df[stats::complete.cases(df[, keep_cols, drop = FALSE]), ]
+    
+    # Identify negative-timestamp jobs \u2014 only where a stage or the total
+    # is MORE THAN 15 MINUTES backwards. Small negative blips (a minute
+    # or two) are usually just clock rounding between systems, not a
+    # real out-of-order entry, so those are left alone and not flagged
+    # or excluded.
+    NEG_THRESHOLD_MIN <- -15
+    neg_flag <- rep(FALSE, nrow(base_df))
+    if (nrow(base_df) > 0 && length(stage_labels) > 0) {
+      neg_flag <- Reduce(`|`, lapply(stage_labels, function(cn) base_df[[cn]] < NEG_THRESHOLD_MIN)) |
+        base_df$TotalMinutes < NEG_THRESHOLD_MIN
+    }
+    negative_jobs <- base_df[neg_flag, , drop = FALSE]
+    if (nrow(negative_jobs) > 0) {
+      negative_jobs$Month <- format(negative_jobs[[stage_cols[1]]], "%Y-%m")
+    }
+    
+    # Flag any crew with more than 2 negative-timestamp jobs in the
+    # same month \u2014 a repeated pattern, not a one-off data slip.
+    crew_negative_flags <- NULL
+    if (nrow(negative_jobs) > 0) {
+      crew_negative_flags <- negative_jobs %>%
+        group_by(.data[[input$crew_col]], Month) %>%
+        summarise(NegativeTimestampJobs = n(), .groups = "drop") %>%
+        filter(NegativeTimestampJobs > 2) %>%
+        arrange(desc(NegativeTimestampJobs))
+      crew_negative_flags <- as.data.frame(crew_negative_flags)
+    }
+    
+    # Cleaning applied to the main ("negative-timestamp jobs excluded")
+    # table and charts: drop rows where any transition AFTER the first
+    # one is less than 4 minutes (e.g. Acknowledge -> Enroute -> On-Site
+    # -> Completion stamped within 4 minutes of each other usually means
+    # they were logged in a batch, not in real time \u2014 the first
+    # transition, typically Assigned -> Acknowledge, is left alone since
+    # a fast acknowledgement is normal), then drop the slowest 1% of
+    # jobs by total time as outliers.
+    apply_common_cleaning <- function(d) {
+      if (nrow(d) > 0 && length(stage_labels) > 1) {
+        later_labels <- stage_labels[-1]
+        too_close_mask <- Reduce(`|`, lapply(later_labels, function(cn) d[[cn]] < 4))
+        d <- d[!too_close_mask, ]
+      }
+      if (nrow(d) > 0) {
+        cutoff <- quantile(d$TotalMinutes, 0.99, na.rm = TRUE)
+        d <- d[d$TotalMinutes <= cutoff, ]
+      }
+      d
+    }
+    
+    data_without_negative <- apply_common_cleaning(base_df[!neg_flag, , drop = FALSE])
+    
+    # "Negative-timestamp jobs included" table: use the raw parsed
+    # timestamps as-is \u2014 no 4-minute-apart rule, no per-stage negative
+    # removal. Only drop a job if its OVERALL total time is negative,
+    # then trim the slowest 1% by total time. This matches the original,
+    # simpler cleaning used before the 4-minute and per-stage rules were
+    # added.
+    data_with_negative <- base_df[!is.na(base_df$TotalMinutes) & base_df$TotalMinutes >= 0, ]
+    if (nrow(data_with_negative) > 0) {
+      cutoff2 <- quantile(data_with_negative$TotalMinutes, 0.99, na.rm = TRUE)
+      data_with_negative <- data_with_negative[data_with_negative$TotalMinutes <= cutoff2, ]
+    }
+    
+    list(data = data_without_negative, data_with_negative = data_with_negative,
+         crew_col = input$crew_col, stage_labels = stage_labels,
+         weather_col = input$weather_col, crew_negative_flags = crew_negative_flags)
+  })
+  
+  # Shared aggregation logic, used for both the negative-excluded and
+  # negative-included summary tables.
+  summarize_crew_df <- function(df, crew_col, stage_labels, min_jobs) {
+    if (is.null(df) || nrow(df) == 0) return(data.frame())
+    out <- df %>%
+      group_by(.data[[crew_col]]) %>%
+      summarise(Jobs = n(),
+                AvgTotalMin = round(mean(TotalMinutes, na.rm = TRUE), 1),
+                MedianTotalMin = round(median(TotalMinutes, na.rm = TRUE), 1),
+                across(all_of(stage_labels), ~round(mean(., na.rm = TRUE), 1),
+                       .names = "Avg_{.col}"),
+                .groups = "drop") %>%
+      filter(Jobs >= min_jobs) %>%
+      arrange(AvgTotalMin)
+    as.data.frame(out)
+  }
+  
+  crew_summary <- reactive({
+    res <- crew_analysis()
+    summarize_crew_df(res$data, res$crew_col, res$stage_labels, input$min_jobs)
+  })
+  
+  crew_summary_with_negative <- reactive({
+    res <- crew_analysis()
+    summarize_crew_df(res$data_with_negative, res$crew_col, res$stage_labels, input$min_jobs)
+  })
+  
+  output$crew_stats_table <- renderDT({
+    summ <- crew_summary()
+    if (is.null(summ) || nrow(summ) == 0) {
+      return(datatable(data.frame(Note = "No jobs remain after filtering \u2014 try lowering 'Minimum jobs per crew' or widening your filters/crew selection."),
+                       options = list(dom = "t"), rownames = FALSE))
+    }
+    datatable(summ, options = list(scrollX = TRUE))
+  })
+  
+  output$crew_stats_table_with_negative <- renderDT({
+    summ <- crew_summary_with_negative()
+    if (is.null(summ) || nrow(summ) == 0) {
+      return(datatable(data.frame(Note = "No jobs remain after filtering \u2014 try lowering 'Minimum jobs per crew' or widening your filters/crew selection."),
+                       options = list(dom = "t"), rownames = FALSE))
+    }
+    datatable(summ, options = list(scrollX = TRUE))
+  })
+  
+  # ---- Data-quality flag: crews with >2 negative-timestamp jobs in a month ----
+  output$crew_negative_flags_table <- renderDT({
+    res <- crew_analysis()
+    flags <- res$crew_negative_flags
+    if (is.null(flags) || nrow(flags) == 0) {
+      return(datatable(data.frame(Note = "No crew has more than 2 negative-timestamp jobs in any single month."),
+                       options = list(dom = "t"), rownames = FALSE))
+    }
+    datatable(flags, options = list(scrollX = TRUE))
+  })
+  
+  # ---- Auto-generated plain-English narrative ----
+  # Picks out the fastest/slowest crew, the size of the gap between them,
+  # which stage drives that gap, and flags any crew with a thin sample.
+  # Shared by both summary tables (negative-excluded and raw).
+  build_crew_narrative <- function(summ, crew_col, stage_labels) {
+    if (is.null(summ) || nrow(summ) == 0) {
+      return(HTML("<p><i>No jobs remain after cleaning/filtering \u2014 try lowering 'Minimum jobs per crew', widening your filters, or selecting more crews.</i></p>"))
+    }
+    
+    fastest <- summ[1, ]
+    slowest <- summ[nrow(summ), ]
+    
+    lines <- c(sprintf(
+      "<b>%s</b> is the fastest crew in this comparison, averaging %.1f minutes (median %.1f) across %d jobs.",
+      fastest[[crew_col]], fastest$AvgTotalMin, fastest$MedianTotalMin, fastest$Jobs
+    ))
+    
+    if (nrow(summ) > 1) {
+      lines <- c(lines, sprintf(
+        "<b>%s</b> is the slowest, averaging %.1f minutes (median %.1f) across %d jobs \u2014 %.1fx slower than %s.",
+        slowest[[crew_col]], slowest$AvgTotalMin, slowest$MedianTotalMin, slowest$Jobs,
+        slowest$AvgTotalMin / fastest$AvgTotalMin, fastest[[crew_col]]
+      ))
+      
+      stage_avg_cols <- intersect(paste0("Avg_", stage_labels), names(summ))
+      if (length(stage_avg_cols) > 0) {
+        diffs <- sapply(stage_avg_cols, function(cn) slowest[[cn]] - fastest[[cn]])
+        top_stage_col <- names(diffs)[which.max(diffs)]
+        top_stage_label <- sub("^Avg_", "", top_stage_col)
+        lines <- c(lines, sprintf(
+          "The biggest gap between them is in the <b>%s</b> stage (%s: %.1f min vs %s: %.1f min) \u2014 that stage is the main driver of the difference, not necessarily overall speed.",
+          top_stage_label, slowest[[crew_col]], slowest[[top_stage_col]], fastest[[crew_col]], fastest[[top_stage_col]]
+        ))
+      }
+    }
+    
+    low_n <- summ[summ$Jobs < 20, ]
+    if (nrow(low_n) > 0) {
+      names_low <- paste(low_n[[crew_col]], collapse = ", ")
+      verb <- if (nrow(low_n) == 1) "has" else "have"
+      poss <- if (nrow(low_n) == 1) "its" else "their"
+      lines <- c(lines, sprintf(
+        "Note: %s %s fewer than 20 jobs in this comparison \u2014 treat %s ranking as indicative rather than conclusive.",
+        names_low, verb, poss
+      ))
+    }
+    
+    HTML(paste0("<p>", paste(lines, collapse = "</p><p>"), "</p>"))
+  }
+  
+  output$crew_narrative <- renderUI({
+    res <- crew_analysis()
+    build_crew_narrative(crew_summary(), res$crew_col, res$stage_labels)
+  })
+  
+  output$crew_narrative_with_negative <- renderUI({
+    res <- crew_analysis()
+    build_crew_narrative(crew_summary_with_negative(), res$crew_col, res$stage_labels)
+  })
+  
+  output$crew_total_chart <- renderPlot({
+    res <- crew_analysis()
+    summ <- crew_summary()
+    validate(need(nrow(summ) > 0,
+                  "No jobs remain after cleaning/filtering for this chart. Try lowering 'Minimum jobs per crew', widening your filters, or selecting more crews."))
+    crew_col <- res$crew_col
+    summ[[crew_col]] <- factor(summ[[crew_col]], levels = summ[[crew_col]][order(summ$AvgTotalMin)])
+    ggplot(summ, aes(x = .data[[crew_col]], y = AvgTotalMin)) +
+      geom_col(fill = "#2C3E50") +
+      labs(title = "Average total time by crew (fastest to slowest)",
+           x = "Crew", y = "Avg minutes (Assigned to Completed)") +
+      theme_minimal(base_size = 13) +
+      theme(axis.text.x = element_text(angle = 45, hjust = 1))
+  })
+  
+  # ---- Average vs. Median: spots crews whose average is skewed by a
+  # handful of unusually long/short jobs (avg >> median = outlier-driven)
+  output$crew_avg_median_chart <- renderPlot({
+    res <- crew_analysis()
+    summ <- crew_summary()
+    validate(need(nrow(summ) > 0,
+                  "No jobs remain after cleaning/filtering for this chart. Try lowering 'Minimum jobs per crew', widening your filters, or selecting more crews."))
+    crew_col <- res$crew_col
+    summ[[crew_col]] <- factor(summ[[crew_col]], levels = summ[[crew_col]][order(summ$AvgTotalMin)])
+    
+    plot_df <- summ %>%
+      select(all_of(crew_col), AvgTotalMin, MedianTotalMin) %>%
+      pivot_longer(cols = c(AvgTotalMin, MedianTotalMin),
+                   names_to = "Metric", values_to = "Minutes") %>%
+      mutate(Metric = recode(Metric, AvgTotalMin = "Average", MedianTotalMin = "Median"))
+    
+    ggplot(plot_df, aes(x = .data[[crew_col]], y = Minutes, fill = Metric)) +
+      geom_col(position = "dodge") +
+      scale_fill_manual(values = c("Average" = "#2C3E50", "Median" = "#E67E22")) +
+      labs(title = "Average vs. median total time by crew",
+           x = "Crew", y = "Minutes", fill = "") +
+      theme_minimal(base_size = 13) +
+      theme(axis.text.x = element_text(angle = 45, hjust = 1))
+  })
+  
+  # ---- Stage breakdown: where each crew's time is actually going
+  # (e.g. slow to acknowledge vs. slow on-site vs. slow to close out)
+  output$crew_stage_chart <- renderPlot({
+    res <- crew_analysis()
+    summ <- crew_summary()
+    validate(need(nrow(summ) > 0,
+                  "No jobs remain after cleaning/filtering for this chart. Try lowering 'Minimum jobs per crew', widening your filters, or selecting more crews."))
+    validate(need(length(res$stage_labels) > 0, "No stage columns available \u2014 make sure you picked at least 2 timestamp columns."))
+    crew_col <- res$crew_col
+    stage_avg_cols <- intersect(paste0("Avg_", res$stage_labels), names(summ))
+    validate(need(length(stage_avg_cols) > 0, "No stage breakdown available for the current selection."))
+    
+    summ[[crew_col]] <- factor(summ[[crew_col]], levels = summ[[crew_col]][order(summ$AvgTotalMin)])
+    
+    plot_df <- summ %>%
+      select(all_of(c(crew_col, stage_avg_cols))) %>%
+      pivot_longer(cols = all_of(stage_avg_cols), names_to = "Stage", values_to = "Minutes") %>%
+      mutate(Stage = sub("^Avg_", "", Stage))
+    
+    ggplot(plot_df, aes(x = .data[[crew_col]], y = Minutes, fill = Stage)) +
+      geom_col(position = "dodge") +
+      labs(title = "Average minutes spent in each stage, by crew",
+           x = "Crew", y = "Avg minutes", fill = "Stage") +
+      theme_minimal(base_size = 13) +
+      theme(axis.text.x = element_text(angle = 45, hjust = 1),
+            legend.position = "bottom")
+  })
+  
+  output$crew_weather_chart <- renderPlot({
+    res <- crew_analysis()
+    validate(need(!is.null(res$weather_col) && res$weather_col != "none",
+                  "No breakdown column selected \u2014 pick one under 'Optional breakdown column' (e.g. Weather Condition)."))
+    validate(need(nrow(res$data) > 0,
+                  "No jobs remain after cleaning/filtering for this chart."))
+    df <- res$data
+    w <- df %>%
+      group_by(.data[[res$weather_col]]) %>%
+      summarise(Jobs = n(), AvgTotalMin = round(mean(TotalMinutes, na.rm = TRUE), 1), .groups = "drop") %>%
+      arrange(AvgTotalMin)
+    ggplot(w, aes(x = reorder(.data[[res$weather_col]], AvgTotalMin), y = AvgTotalMin)) +
+      geom_col(fill = "#18BC9C") +
+      geom_text(aes(label = paste0("n=", Jobs)), vjust = -0.4, size = 3.5) +
+      labs(title = "Average total time by weather condition (selected crews)",
+           x = res$weather_col, y = "Avg minutes") +
+      theme_minimal(base_size = 13) +
+      theme(axis.text.x = element_text(angle = 45, hjust = 1))
+  })
+  
+  output$download_crew_stats <- downloadHandler(
+    filename = function() paste0("crew_comparison_", Sys.Date(), ".csv"),
+    content = function(file) {
+      write.csv(crew_summary(), file, row.names = FALSE)
+    }
+  )
+}
+
+# ============================================================
+shinyApp(ui = ui, server = server)
