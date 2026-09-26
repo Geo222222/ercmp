@@ -1,4 +1,4 @@
-import type { Row } from '../types'
+﻿import type { Row } from '../types'
 import { roundTo } from './format'
 import { asNumber, asText, categoricalColumns, numericColumns } from './rows'
 import { quantile } from './crew'
@@ -22,6 +22,23 @@ export type CategoricalSummary = {
   Missing: number
   UniqueValues: number
   MostFrequent: string | null
+  MostFrequentCount: number
+  TopShare: number | null
+}
+
+export type ValueShare = {
+  value: string
+  count: number
+  share: number
+}
+
+export type FieldBreakdown = {
+  column: string
+  n: number
+  missing: number
+  unique: number
+  values: ValueShare[]
+  hidden: number
 }
 
 function sampleSd(values: number[]): number | null {
@@ -79,20 +96,56 @@ function summarizeCategorical(rows: Row[], column: string): CategoricalSummary {
     counts.set(text, (counts.get(text) ?? 0) + 1)
   }
   let top: string | null = null
-  let topCount = -1
+  let topCount = 0
   for (const [value, count] of counts) {
     if (count > topCount) {
       top = value
       topCount = count
     }
   }
+  const present = rows.length - missing
   return {
     Variable: column,
-    N: rows.length - missing,
+    N: present,
     Missing: missing,
     UniqueValues: counts.size,
     MostFrequent: top,
+    MostFrequentCount: topCount,
+    TopShare: present > 0 && top != null ? topCount / present : null,
   }
+}
+
+/** Ranked value shares for a categorical field — used by Stats dive-in. */
+export function fieldBreakdown(rows: Row[], column: string, limit = 48): FieldBreakdown | null {
+  const counts = new Map<string, number>()
+  let missing = 0
+  for (const row of rows) {
+    const text = asText(row[column])
+    if (text == null) {
+      missing += 1
+      continue
+    }
+    counts.set(text, (counts.get(text) ?? 0) + 1)
+  }
+  const present = rows.length - missing
+  if (present === 0 && missing === 0) return null
+  const ranked = [...counts.entries()]
+    .map(([value, count]) => ({ value, count, share: present > 0 ? count / present : 0 }))
+    .sort((a, b) => b.count - a.count || a.value.localeCompare(b.value))
+  return {
+    column,
+    n: present,
+    missing,
+    unique: counts.size,
+    values: ranked.slice(0, limit),
+    hidden: Math.max(0, ranked.length - limit),
+  }
+}
+
+/** Compact top-N shares for instrument spark bars. */
+export function topShares(rows: Row[], column: string, limit = 5): ValueShare[] {
+  const breakdown = fieldBreakdown(rows, column, limit)
+  return breakdown?.values ?? []
 }
 
 export function descriptiveStats(rows: Row[], columns: string[], groupCol: string): {
