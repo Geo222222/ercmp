@@ -13,7 +13,7 @@ import {
 import { defaultConfig } from './lib/defaults'
 import { filterRows, valueCounts } from './lib/rows'
 import { buildCrewReport } from './lib/crew'
-import { displayValue, formatInt } from './lib/format'
+import { formatInt } from './lib/format'
 import { applyTheme, readTheme, type ThemeId } from './lib/theme'
 import { MonthProvider, type MonthContextValue } from './lib/monthContext'
 import { CommandView } from './views/CommandView'
@@ -21,6 +21,8 @@ import { RosterView } from './views/RosterView'
 import { StatsView } from './views/StatsView'
 import { ChartsView } from './views/ChartsView'
 import { FilterDrawer } from './components/FilterDrawer'
+import { MonthsOrb } from './components/MonthsOrb'
+import { ScopeBar } from './components/ScopeBar'
 import { ThemeOrb } from './components/ThemeOrb'
 import { ErcmpLogo } from './components/ErcmpLogo'
 import './styles/months.css'
@@ -297,6 +299,15 @@ export function App() {
             </div>
           </div>
           <div className="top-actions">
+            <MonthsOrb
+              months={months}
+              focusMonthId={focusMonth?.id ?? null}
+              onToggle={toggleMonth}
+              onFocus={setFocusMonthId}
+              onSelectAll={() => setMonthFilter(months.map((item) => item.id))}
+              onSelectOnly={(id) => setMonthFilter([id])}
+              onFiles={ingestFiles}
+            />
             <ThemeOrb theme={theme} onTheme={setTheme} />
             <button type="button" className="solid console-btn" onClick={() => setDrawer(true)} disabled={!ready}>
               <span className="console-btn-mark" aria-hidden="true" />
@@ -305,20 +316,32 @@ export function App() {
           </div>
         </header>
 
-        {ready && config && globalOptions.length > 0 && globalOptions.length <= 24 && (
-          <FilterChips
-            label={config.globalFilterCol}
-            options={globalOptions}
-            selected={config.globalFilterVals}
-            onChange={(globalFilterVals) => setConfig({ ...config, globalFilterVals })}
-          />
-        )}
-        {ready && config && extraOptions.length > 0 && extraOptions.length <= 12 && (
-          <FilterChips
-            label={config.extraFilterCol}
-            options={extraOptions}
-            selected={config.extraFilterVals}
-            onChange={(extraFilterVals) => setConfig({ ...config, extraFilterVals })}
+        {ready && config && (
+          <ScopeBar
+            filters={[
+              ...(globalOptions.length > 0 && globalOptions.length <= 24
+                ? [
+                    {
+                      key: 'global',
+                      label: config.globalFilterCol,
+                      options: globalOptions,
+                      selected: config.globalFilterVals,
+                      onChange: (globalFilterVals: string[]) => setConfig({ ...config, globalFilterVals }),
+                    },
+                  ]
+                : []),
+              ...(extraOptions.length > 0 && extraOptions.length <= 12
+                ? [
+                    {
+                      key: 'extra',
+                      label: config.extraFilterCol,
+                      options: extraOptions,
+                      selected: config.extraFilterVals,
+                      onChange: (extraFilterVals: string[]) => setConfig({ ...config, extraFilterVals }),
+                    },
+                  ]
+                : []),
+            ]}
           />
         )}
 
@@ -328,7 +351,7 @@ export function App() {
             <section className="panel">
               <h2>Workbook needed</h2>
               <p>{error}</p>
-              <p className="hint">Drop `.xlsx` on Command, or place files in `data/` / the project root.</p>
+              <p className="hint">Open the Months orb to drop `.xlsx`, or place files in `data/` / the project root.</p>
               <UploadButton onUpload={onUpload} />
             </section>
           )}
@@ -343,13 +366,6 @@ export function App() {
               selectedCrew={selectedCrew}
               onSelectCrew={setSelectedCrew}
               monthSnapshots={monthSnapshots}
-              months={months}
-              focusMonthId={focusMonth?.id ?? null}
-              onToggleMonth={toggleMonth}
-              onFocusMonth={setFocusMonthId}
-              onSelectAllMonths={() => setMonthFilter(months.map((item) => item.id))}
-              onSelectOnlyMonth={(id) => setMonthFilter([id])}
-              onMonthFiles={ingestFiles}
             />
           )}
           {ready && focusTable && view === 'roster' && <RosterView headers={focusTable.headers} rows={combinedRows} />}
@@ -409,45 +425,6 @@ export function App() {
         )}
       </div>
     </MonthProvider>
-  )
-}
-
-function FilterChips({
-  label,
-  options,
-  selected,
-  onChange,
-}: {
-  label: string
-  options: { value: string; count: number }[]
-  selected: string[]
-  onChange: (values: string[]) => void
-}) {
-  function toggle(value: string) {
-    onChange(selected.includes(value) ? selected.filter((item) => item !== value) : [...selected, value])
-  }
-
-  return (
-    <div className="filter-bar">
-      <span>{label}</span>
-      <div className="chips">
-        <button type="button" className={selected.length === 0 ? 'chip on' : 'chip'} onClick={() => onChange([])}>
-          All
-        </button>
-        {options.map((option) => (
-          <button
-            key={option.value}
-            type="button"
-            className={selected.includes(option.value) ? 'chip on' : 'chip'}
-            aria-pressed={selected.includes(option.value)}
-            onClick={() => toggle(option.value)}
-          >
-            {displayValue(option.value)}
-            <em>{formatInt(option.count)}</em>
-          </button>
-        ))}
-      </div>
-    </div>
   )
 }
 

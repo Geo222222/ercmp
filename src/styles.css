@@ -177,7 +177,7 @@ button:focus-visible, select:focus-visible, input:focus-visible {
   background-position: center top;
 }
 
-h1, h2, .eyebrow, .kicker, .dock-label, .mode span, .kpi span, .insight-label, .theme-orb-label, .meta-label, .brand-sub {
+h1, h2, .eyebrow, .kicker, .dock-label, .mode span, .kpi span, .insight-label, .theme-orb-label, .months-orb-label, .meta-label, .brand-sub {
   font-family: var(--font-display);
   letter-spacing: 0.04em;
 }
@@ -1607,9 +1607,10 @@ input[type="search"], input[type="number"], select {
 }
 
 @media (max-width: 720px) {
-  .top-actions { grid-column: 1 / -1; justify-content: stretch; }
-  .top-actions .theme-orb { margin-right: auto; }
-  .top-actions .console-btn { flex: 0 0 auto; }
+  .top-actions { grid-column: 1 / -1; justify-content: stretch; gap: 14px; }
+  .top-actions .months-orb,
+  .top-actions .theme-orb { flex: 0 0 auto; }
+  .top-actions .console-btn { margin-left: auto; flex: 0 0 auto; }
   .filter-bar { grid-template-columns: 1fr; }
   .split-fields { grid-template-columns: 1fr; }
   .crew-detail { grid-template-columns: 1fr; padding-left: var(--space-2); }

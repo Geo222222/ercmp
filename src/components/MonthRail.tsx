@@ -11,6 +11,8 @@ type Props = {
   onSelectAll: () => void
   onSelectOnly: (id: string) => void
   onFiles: (files: File[]) => void
+  /** Tighter layout when hosted inside the months sheet. */
+  compact?: boolean
 }
 
 export function MonthRail({
@@ -21,6 +23,7 @@ export function MonthRail({
   onSelectAll,
   onSelectOnly,
   onFiles,
+  compact = false,
 }: Props) {
   const fileRef = useRef<HTMLInputElement>(null)
   const [dragOver, setDragOver] = useState(false)
@@ -49,7 +52,12 @@ export function MonthRail({
 
   return (
     <section
-      className={['month-rail', dragOver ? 'drop-target' : '', months.length === 0 ? 'empty' : '']
+      className={[
+        'month-rail',
+        compact ? 'compact' : '',
+        dragOver ? 'drop-target' : '',
+        months.length === 0 ? 'empty' : '',
+      ]
         .filter(Boolean)
         .join(' ')}
       aria-label="Month library"
@@ -103,7 +111,7 @@ export function MonthRail({
             </p>
             <span>
               {activeCount} of {months.length} in comparison
-              {activeCount > 1 ? ' · side-by-side below' : ''}
+              {activeCount > 1 ? ' · side-by-side on Command' : ''}
             </span>
           </div>
           <div className="month-chips" role="group" aria-label="Active months">
