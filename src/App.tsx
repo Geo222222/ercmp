@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import type { BoardConfig, CleaningMode, MonthDataset, MonthSnapshot, Row } from './types'
+import type { BoardConfig, CleaningMode, MonthDataset, MonthSnapshot, Row, ViewId } from './types'
 import {
   createMonthDataset,
   fetchDiscoveredWorkbooks,
@@ -20,14 +20,16 @@ import { CommandView } from './views/CommandView'
 import { RosterView } from './views/RosterView'
 import { StatsView } from './views/StatsView'
 import { ChartsView } from './views/ChartsView'
+import { MapView } from './views/MapView'
 import { FilterDrawer } from './components/FilterDrawer'
 import { MonthsOrb } from './components/MonthsOrb'
 import { ScopeBar } from './components/ScopeBar'
 import { ThemeOrb } from './components/ThemeOrb'
 import { ErcmpLogo } from './components/ErcmpLogo'
+import { parishColumn } from './lib/parishGeo'
 import './styles/months.css'
 
-type View = 'command' | 'roster' | 'stats' | 'charts'
+type View = ViewId
 
 export function App() {
   const [months, setMonths] = useState<MonthDataset[]>([])
@@ -386,6 +388,24 @@ export function App() {
               onChange={(patch) => setConfig({ ...config, ...patch })}
             />
           )}
+          {ready && config && focusTable && view === 'map' && (
+            <MapView
+              headers={focusTable.headers}
+              rows={combinedRows}
+              config={config}
+              report={report}
+              mode={mode}
+              onMode={setMode}
+              monthLabel={activeLabel}
+              onScopeParish={(values) => {
+                const col = parishColumn(focusTable.headers, config)
+                if (!col) return
+                setConfig({ ...config, globalFilterCol: col, globalFilterVals: values })
+              }}
+              onJump={setView}
+              onSelectCrew={setSelectedCrew}
+            />
+          )}
         </main>
 
         <nav className="dock" aria-label="Sections">
@@ -394,6 +414,7 @@ export function App() {
           <DockButton id="roster" view={view} onView={setView} label="Roster" />
           <DockButton id="stats" view={view} onView={setView} label="Stats" />
           <DockButton id="charts" view={view} onView={setView} label="Charts" />
+          <DockButton id="map" view={view} onView={setView} label="Map" />
         </nav>
 
         {drawer && ready && config && focusTable && focusMonth && (
@@ -469,16 +490,30 @@ function DockIcon({ id }: { id: View }) {
       </svg>
     )
   }
+  if (id === 'charts') {
+    return (
+      <svg viewBox="0 0 24 24" width="20" height="20" fill="none" aria-hidden="true">
+        <path
+          d="M4.5 15.5l4.2-4.2 3.2 3.1 6.6-7.4"
+          stroke="currentColor"
+          strokeWidth="1.7"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+        <path d="M15.2 7h3.8v3.8" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
+      </svg>
+    )
+  }
   return (
     <svg viewBox="0 0 24 24" width="20" height="20" fill="none" aria-hidden="true">
       <path
-        d="M4.5 15.5l4.2-4.2 3.2 3.1 6.6-7.4"
+        d="M4.5 12.5c2.2-4.8 4.2-7.2 7.5-7.2s5.3 2.4 7.5 7.2c-2.2 4.8-4.2 7.2-7.5 7.2s-5.3-2.4-7.5-7.2z"
         stroke="currentColor"
-        strokeWidth="1.7"
-        strokeLinecap="round"
+        strokeWidth="1.6"
         strokeLinejoin="round"
       />
-      <path d="M15.2 7h3.8v3.8" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
+      <path d="M12 8.2v7.6M8.4 12h7.2" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+      <circle cx="12" cy="12" r="1.5" fill="currentColor" />
     </svg>
   )
 }

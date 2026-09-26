@@ -1493,7 +1493,7 @@ input[type="search"], input[type="number"], select {
   bottom: 0;
   z-index: 20;
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  grid-template-columns: repeat(5, 1fr);
   gap: 6px;
   padding: 10px 10px calc(10px + env(safe-area-inset-bottom));
   background:

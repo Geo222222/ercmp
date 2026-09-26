@@ -52,6 +52,8 @@ export type ChartType = 'bar' | 'hist' | 'box' | 'scatter' | 'corr'
 
 export type CleaningMode = 'cleaned' | 'raw'
 
+export type ViewId = 'command' | 'roster' | 'stats' | 'charts' | 'map'
+
 export type BoardConfig = {
   globalFilterCol: string
   globalFilterVals: string[]

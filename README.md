@@ -22,9 +22,12 @@ npm run dev
 
 Open the local address Vite prints. `npm run check` verifies the crew-cleaning counts against the June workbook. `npm run build` writes a static site to `dist/`.
 
+Copy `.env.example` to `.env` if you want Google Maps on the Map tab (optional — SVG parish plane always works).
+
 ## Board
 
 - **Command** ranks crews from fastest to slowest, with stage, average-versus-median, and weather charts. With multiple months active, Command also shows side-by-side month KPI cards and a crew Δ table.
+- **Map** (Universe) — Jamaica parish plane composed from Command / Roster / Stats / Charts signals. Tap a parish for KPIs, top crews, quality pulse, and actions (Scope, Roster, Command, Charts).
 - **Months rail** — tap chips to include/exclude periods; double-tap a chip for that month only.
 - **Field-cleaned** drops jobs with a stage more than 15 minutes backward, drops later stages stamped under 4 minutes apart, then drops the slowest 1%.
 - **Raw clocks** keeps those jobs and only removes negative overall totals, then the slowest 1%.
@@ -32,3 +35,30 @@ Open the local address Vite prints. `npm run check` verifies the crew-cleaning c
 - Tap a crew for its stage times. `20+` hides thin samples. CSV download follows the table on screen.
 
 Timestamp order defaults to Assigned, Acknowledge, Enroute, On-Site, then Actual completion.
+
+## Map / Google Maps
+
+The Map dock tab paints active working rows onto Jamaica parish polygons (`public/geo/jamaica-parishes.geojson`, geoBoundaries ADM1, CC BY-SA 2.0).
+
+1. Enable **Maps JavaScript API** in Google Cloud.
+2. Put the browser key in `.env` as `VITE_GOOGLE_MAPS_API_KEY=...`
+3. Optional: `VITE_GOOGLE_MAPS_MAP_ID=...` for a cloud vector Map ID (tilt / styled 3D-friendly rendering). Without it, a dark styled roadmap still loads; photorealistic 3D is progressive enhancement only.
+4. Restart `npm run dev` after changing env vars.
+
+If the key is missing or Maps fails, Map still shows the SVG choropleth.
+
+### Parish name mapping
+
+| Spreadsheet value | Polygon | Notes |
+| --- | --- | --- |
+| KSAN | Kingston | Kingston & St. Andrew North (approx.) |
+| KSAS | St. Andrew | Kingston & St. Andrew South (approx.) |
+| Portmore | St. Catherine | Municipality inside St. Catherine |
+| St.Catherine / St. Catherine | St. Catherine | |
+| St.James / St. James | St. James | |
+| St.Ann / St. Ann | St. Ann | |
+| St.Mary / St. Mary | St. Mary | |
+| St.Elizabeth / St. Elizabeth | St. Elizabeth | |
+| St.Thomas / St. Thomas | St. Thomas | |
+| Clarendon, Manchester, Westmoreland, Hanover, Portland, Trelawny | same name | |
+| null / empty | Unassigned | Listed in focus panel, no polygon |

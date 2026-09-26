@@ -72,6 +72,12 @@ export const HELP = {
 
   avgVsMedian:
     'Average vs median spots crews pulled by a few long jobs. A large gap means a long tail, not every job being slow.',
+
+  mapUniverse:
+    'Universe plane for Jamaica. Parish polygons carry job density and response time from the same working set as Command, Roster, Stats, and Charts. Tap a parish for a focus stack — scope, roster dive, or jump Command.',
+
+  mapMetric:
+    'Job density paints by count. Avg response paints slower parishes hotter using complete stage clocks (same timing rules as Command).',
 } as const
 
 export type HelpKey = keyof typeof HELP
