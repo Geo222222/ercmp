@@ -1,4 +1,5 @@
 import { useEffect, useId, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import type { MonthDataset } from '../types'
 import { MonthRail } from './MonthRail'
 
@@ -36,13 +37,58 @@ export function MonthsOrb({
 
   useEffect(() => {
     if (!open) return
+    const prev = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
     const onKey = (event: KeyboardEvent) => {
       if (event.key === 'Escape') setOpen(false)
     }
     window.addEventListener('keydown', onKey)
-    closeRef.current?.focus()
-    return () => window.removeEventListener('keydown', onKey)
+    // Focus after paint so the portal node exists.
+    const id = window.requestAnimationFrame(() => closeRef.current?.focus())
+    return () => {
+      document.body.style.overflow = prev
+      window.removeEventListener('keydown', onKey)
+      window.cancelAnimationFrame(id)
+    }
   }, [open])
+
+  const sheet =
+    open &&
+    createPortal(
+      <div className="chrome-sheet-scrim" onClick={() => setOpen(false)}>
+        <div
+          className="chrome-sheet months-sheet"
+          id={listId}
+          role="dialog"
+          aria-modal="true"
+          aria-label="Period library"
+          onClick={(event) => event.stopPropagation()}
+        >
+          <div className="chrome-sheet-head">
+            <div>
+              <p className="kicker">Period library</p>
+              <h2>Months</h2>
+            </div>
+            <button type="button" className="icon-btn" ref={closeRef} onClick={() => setOpen(false)}>
+              Done
+            </button>
+          </div>
+          <div className="chrome-sheet-body">
+            <MonthRail
+              months={months}
+              focusMonthId={focusMonthId}
+              onToggle={onToggle}
+              onFocus={onFocus}
+              onSelectAll={onSelectAll}
+              onSelectOnly={onSelectOnly}
+              onFiles={onFiles}
+              compact
+            />
+          </div>
+        </div>
+      </div>,
+      document.body,
+    )
 
   return (
     <>
@@ -64,43 +110,7 @@ export function MonthsOrb({
           <span className="months-orb-label">Months</span>
         </button>
       </div>
-
-      {open && (
-        <div className="chrome-sheet-scrim" onClick={() => setOpen(false)}>
-          <div
-            className="chrome-sheet months-sheet"
-            id={listId}
-            role="dialog"
-            aria-modal="true"
-            aria-label="Period library"
-            onClick={(event) => event.stopPropagation()}
-          >
-            <div className="chrome-sheet-head">
-              <div>
-                <p className="kicker">Period library</p>
-                <h2>Months</h2>
-              </div>
-              <button type="button" className="icon-btn" ref={closeRef} onClick={() => setOpen(false)}>
-                Done
-              </button>
-            </div>
-            <div className="chrome-sheet-body">
-              <MonthRail
-                months={months}
-                focusMonthId={focusMonthId}
-                onToggle={onToggle}
-                onFocus={onFocus}
-                onSelectAll={onSelectAll}
-                onSelectOnly={onSelectOnly}
-                onFiles={(files) => {
-                  onFiles(files)
-                }}
-                compact
-              />
-            </div>
-          </div>
-        </div>
-      )}
+      {sheet}
     </>
   )
 }

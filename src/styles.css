@@ -1459,7 +1459,7 @@ input[type="search"], input[type="number"], select {
 .scrim {
   position: fixed;
   inset: 0;
-  z-index: 30;
+  z-index: 210;
   background: var(--scrim);
 }
 
@@ -1737,6 +1737,12 @@ input[type="search"], input[type="number"], select {
     linear-gradient(180deg, color-mix(in srgb, var(--panel) 92%, var(--accent) 8%), var(--panel));
   box-shadow: var(--shadow), 0 12px 28px color-mix(in srgb, var(--bg) 55%, transparent);
   z-index: 20;
+}
+
+/* Portaled above Scope / page chrome — not clipped by topbar clip-path */
+.theme-orb-menu.portal {
+  position: fixed;
+  z-index: 190;
 }
 
 .theme-orb-option {

@@ -581,7 +581,7 @@
 .chrome-sheet-scrim {
   position: fixed;
   inset: 0;
-  z-index: 80;
+  z-index: 200;
   display: grid;
   align-items: end;
   justify-items: center;
@@ -630,7 +630,13 @@
 }
 
 .scope-bar {
+  position: relative;
+  z-index: 4;
   margin-bottom: var(--space-2);
+}
+
+.scope-bar.open {
+  z-index: 6;
 }
 
 .scope-pill {
