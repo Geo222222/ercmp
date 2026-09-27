@@ -6,7 +6,7 @@ import { downloadCsv } from '../lib/download'
 import { dateStamp, displayValue, formatDuration, formatInt, shortStage } from '../lib/format'
 import { monthTone, rangeNote } from '../lib/excel'
 import { themePalette } from '../lib/theme'
-import { downloadMonthlyReport } from '../lib/monthlyReport'
+import { downloadMonthlyReport, printMonthlyReport } from '../lib/monthlyReport'
 import { Hint, LabelHint } from '../components/Hint'
 
 type ChartMode = 'stages' | 'avg' | 'total' | 'weather'
@@ -162,6 +162,9 @@ export function CommandView({
         </div>
         <button type="button" className="ghost" onClick={() => downloadMonthlyReport(periodLabel, report, config, mode)}>
           Monthly report
+        </button>
+        <button type="button" className="solid" onClick={() => printMonthlyReport(periodLabel, report, config, mode)}>
+          Print / Save PDF
         </button>
       </div>
 

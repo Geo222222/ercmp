@@ -15,12 +15,12 @@ function crewRows(rows: CrewSummaryRow[]): string {
     .join('')
 }
 
-export function downloadMonthlyReport(
+export function monthlyReportHtml(
   periodLabel: string,
   report: CrewReport,
   config: BoardConfig,
   mode: CleaningMode,
-): void {
+): string {
   const rows = mode === 'cleaned' ? report.cleaned : report.raw
   const boardJobs = rows.reduce((sum, row) => sum + row.jobs, 0)
   const fastest = rows[0]
@@ -41,11 +41,34 @@ body{font-family:Arial,sans-serif;color:#17221d;max-width:960px;margin:40px auto
 <h2>Data quality and timestamp coaching</h2><p>${coaching}</p><table><thead><tr><th>Crew</th><th>Month</th><th>Backward-clock jobs</th></tr></thead><tbody>${flags}</tbody></table><p class="note">These flags identify timestamp patterns for review. They should support a coaching conversation and job-level verification, not serve as a standalone performance judgment.</p>
 <h2>Recommended discussion</h2><ol><li>Review the slowest crews’ stage averages and identify which timestamp interval contributes most to total time.</li><li>Walk through the timestamp sequence: ${report.stageLabels.join(' → ')}.</li><li>Compare a small sample of flagged and slow jobs with dispatch records to separate data-entry issues from real field delays.</li><li>Agree on a follow-up month and recheck both response time and timestamp completeness.</li></ol>
 </body></html>`
-  const blob = new Blob([html], { type: 'text/html;charset=utf-8' })
+  return html
+}
+
+export function downloadMonthlyReport(
+  periodLabel: string,
+  report: CrewReport,
+  config: BoardConfig,
+  mode: CleaningMode,
+): void {
+  const blob = new Blob([monthlyReportHtml(periodLabel, report, config, mode)], { type: 'text/html;charset=utf-8' })
   const url = URL.createObjectURL(blob)
   const link = document.createElement('a')
   link.href = url
   link.download = `monthly_response_report_${new Date().toISOString().slice(0, 10)}.html`
   link.click()
   URL.revokeObjectURL(url)
+}
+
+export function printMonthlyReport(
+  periodLabel: string,
+  report: CrewReport,
+  config: BoardConfig,
+  mode: CleaningMode,
+): void {
+  const reportWindow = window.open('', '_blank', 'noopener,noreferrer')
+  if (!reportWindow) return
+  reportWindow.document.write(monthlyReportHtml(periodLabel, report, config, mode))
+  reportWindow.document.close()
+  reportWindow.focus()
+  reportWindow.setTimeout(() => reportWindow.print(), 250)
 }
