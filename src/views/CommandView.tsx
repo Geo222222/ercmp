@@ -7,6 +7,7 @@ import { dateStamp, displayValue, formatDuration, formatInt, shortStage } from '
 import { monthTone, rangeNote } from '../lib/excel'
 import { themePalette } from '../lib/theme'
 import { downloadMonthlyReport, printMonthlyReport } from '../lib/monthlyReport'
+import { crewTeam, type CrewTeam } from '../lib/crewTeams'
 import { Hint, LabelHint } from '../components/Hint'
 
 type ChartMode = 'stages' | 'avg' | 'total' | 'weather'
@@ -52,14 +53,22 @@ export function CommandView({
   const [chartMode, setChartMode] = useState<ChartMode>('stages')
   const [showTable, setShowTable] = useState(false)
   const [crewQuery, setCrewQuery] = useState('')
+  const [teamFilter, setTeamFilter] = useState<CrewTeam | null>(null)
   const [palette, setPalette] = useState(() => themePalette())
-  const rows = mode === 'cleaned' ? report.cleaned : report.raw
+  const baseRows = mode === 'cleaned' ? report.cleaned : report.raw
+  const rows = teamFilter ? baseRows.filter((row) => crewTeam(row.crew) === teamFilter) : baseRows
   const weatherRows = mode === 'cleaned' ? report.weatherCleaned : report.weatherRaw
+  const scopedReport: CrewReport = {
+    ...report,
+    cleaned: teamFilter ? report.cleaned.filter((row) => crewTeam(row.crew) === teamFilter) : report.cleaned,
+    raw: teamFilter ? report.raw.filter((row) => crewTeam(row.crew) === teamFilter) : report.raw,
+    flags: teamFilter ? report.flags.filter((flag) => crewTeam(flag.crew) === teamFilter) : report.flags,
+  }
   const boardJobs = rows.reduce((sum, row) => sum + row.jobs, 0)
   const fastest = rows[0]
   const slowest = rows[rows.length - 1]
   const maxAvg = Math.max(...rows.map((row) => row.avg), 1)
-  const maxFlag = Math.max(...report.flags.map((flag) => flag.jobs), 1)
+  const maxFlag = Math.max(...scopedReport.flags.map((flag) => flag.jobs), 1)
 
   useEffect(() => {
     const sync = () => setPalette(themePalette())
@@ -75,7 +84,7 @@ export function CommandView({
     node?.scrollIntoView({ block: 'nearest', behavior: 'smooth' })
   }, [selectedCrew])
 
-  const outliers = useMemo(() => buildOutliers(rows, report.stageLabels), [rows, report.stageLabels])
+  const outliers = useMemo(() => buildOutliers(rows, scopedReport.stageLabels), [rows, scopedReport.stageLabels])
 
   const chartRows = useMemo(() => {
     const q = crewQuery.trim().toLowerCase()
@@ -160,10 +169,10 @@ export function CommandView({
             </div>
           </div>
         </div>
-        <button type="button" className="ghost" onClick={() => downloadMonthlyReport(periodLabel, report, config, mode)}>
+        <button type="button" className="ghost" onClick={() => downloadMonthlyReport(periodLabel, scopedReport, config, mode)}>
           Monthly report
         </button>
-        <button type="button" className="solid" onClick={() => printMonthlyReport(periodLabel, report, config, mode)}>
+        <button type="button" className="solid" onClick={() => printMonthlyReport(periodLabel, scopedReport, config, mode)}>
           Print / Save PDF
         </button>
       </div>
@@ -191,9 +200,9 @@ export function CommandView({
         />
         <Kpi
           label="Clock flags"
-          value={formatInt(report.flags.length)}
-          note={report.flags.length ? 'crew-months over 2 bad jobs' : 'No repeated clock reversals'}
-          tone={report.flags.length ? 'warn' : 'good'}
+          value={formatInt(scopedReport.flags.length)}
+          note={scopedReport.flags.length ? 'crew-months over 2 bad jobs' : 'No repeated clock reversals'}
+          tone={scopedReport.flags.length ? 'warn' : 'good'}
         />
       </section>
 
@@ -204,10 +213,10 @@ export function CommandView({
       <div className="board">
         <Briefing
           rows={rows}
-          stageLabels={report.stageLabels}
-          counts={report.counts}
+          stageLabels={scopedReport.stageLabels}
+          counts={scopedReport.counts}
           mode={mode}
-          flagCount={report.flags.length}
+          flagCount={scopedReport.flags.length}
           selectedCrew={selectedCrew}
           onSelectCrew={onSelectCrew}
         />
@@ -238,7 +247,7 @@ export function CommandView({
                   index={index}
                   count={rows.length}
                   maxAvg={maxAvg}
-                  stageLabels={report.stageLabels}
+                  stageLabels={scopedReport.stageLabels}
                   selected={selectedCrew === row.crew}
                   onSelect={() => toggleCrew(row.crew)}
                   rankFast={palette.rankFast}
@@ -247,7 +256,7 @@ export function CommandView({
               ))}
             </div>
           )}
-          {showTable && rows.length > 0 && <SummaryTable rows={rows} stageLabels={report.stageLabels} />}
+          {showTable && rows.length > 0 && <SummaryTable rows={rows} stageLabels={scopedReport.stageLabels} />}
         </section>
 
         <section className="panel comparison-panel">
@@ -285,6 +294,11 @@ export function CommandView({
                     aria-label="Find crew"
                   />
                 </label>
+                <div className="seg crew-team-seg" role="group" aria-label="Crew team">
+                  <button type="button" aria-pressed={teamFilter == null} onClick={() => setTeamFilter(null)}>All</button>
+                  <button type="button" aria-pressed={teamFilter === 'in-house'} onClick={() => setTeamFilter('in-house')}>In-house</button>
+                  <button type="button" aria-pressed={teamFilter === 'contractor'} onClick={() => setTeamFilter('contractor')}>Contractor</button>
+                </div>
                 {selectedCrew && (
                   <button type="button" className="text-btn" onClick={() => onSelectCrew(null)}>
                     Clear
@@ -321,14 +335,14 @@ export function CommandView({
           )}
 
           {selectedRow && chartMode !== 'weather' && (
-            <FocusCard row={selectedRow} stageLabels={report.stageLabels} onClear={() => onSelectCrew(null)} />
+            <FocusCard row={selectedRow} stageLabels={scopedReport.stageLabels} onClear={() => onSelectCrew(null)} />
           )}
 
           <ChartBody
             mode={chartMode}
             rows={chartRows}
             weather={weatherRows}
-            stageLabels={report.stageLabels}
+            stageLabels={scopedReport.stageLabels}
             weatherCol={config.weatherCol}
             highlight={selectedCrew}
             palette={palette}
@@ -337,7 +351,7 @@ export function CommandView({
 
           {chartMode === 'stages' && (
             <div className="legend">
-              {report.stageLabels.map((label, index) => (
+              {scopedReport.stageLabels.map((label, index) => (
                 <span key={label}>
                   <i style={{ background: palette.stages[index % palette.stages.length] }} />
                   {shortStage(label)}
@@ -372,7 +386,7 @@ export function CommandView({
               </p>
               <h2>Negative timestamps</h2>
             </div>
-            {report.flags.length > 0 && (
+            {scopedReport.flags.length > 0 && (
               <div className="severity-legend" aria-hidden="true">
                 <span className="sev critical">Critical ≥20</span>
                 <span className="sev high">High ≥8</span>
@@ -390,11 +404,11 @@ export function CommandView({
             </span>
           </p>
 
-          {report.flags.length === 0 ? (
+          {scopedReport.flags.length === 0 ? (
             <p className="empty">No crew has more than 2 negative-timestamp jobs in any single month.</p>
           ) : (
             <div className="quality-grid" role="list">
-              {report.flags.map((flag) => (
+              {scopedReport.flags.map((flag) => (
                 <FlagCard
                   key={`${flag.crew}-${flag.month}`}
                   flag={flag}
