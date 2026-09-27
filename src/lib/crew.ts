@@ -4,7 +4,7 @@ import { roundTo } from './format'
 import { asText } from './rows'
 
 const NEGATIVE_THRESHOLD_MIN = -15
-const BATCH_STAMP_MIN = 4
+const MIN_ENROUTE_COMPLETION_MIN = 5
 const OUTLIER_QUANTILE = 0.99
 
 type Job = {
@@ -43,7 +43,7 @@ export function quantile(values: number[], probability: number): number {
   return sorted[lower - 1] + (h - lower) * (sorted[upper - 1] - sorted[lower - 1])
 }
 
-function summarize(jobs: Job[], stageCount: number, minJobs: number, includeAll: boolean): CrewSummaryRow[] {
+function summarize(jobs: Job[], stageCount: number, minJobs: number): CrewSummaryRow[] {
   const groups = new Map<string, Job[]>()
   for (const job of jobs) {
     const list = groups.get(job.crew)
@@ -53,7 +53,7 @@ function summarize(jobs: Job[], stageCount: number, minJobs: number, includeAll:
 
   const rows: CrewSummaryRow[] = []
   for (const [crew, list] of groups) {
-    if (!includeAll && list.length < minJobs) continue
+    if (list.length < minJobs) continue
     const totals = list.map((job) => job.total)
     rows.push({
       crew,
@@ -168,18 +168,18 @@ export function buildCrewReport(rows: Row[], config: BoardConfig): CrewReport {
 
   const withoutNegative = jobs.filter((job) => !job.negative)
   const afterBatch =
-    stageLabels.length > 1
-      ? withoutNegative.filter((job) => job.stages.slice(1).every((minutes) => minutes >= BATCH_STAMP_MIN))
-      : withoutNegative
-  const cleanedTrim = trimOutliers(afterBatch)
+    stageLabels.length >= 3
+      ? jobs.filter((job) => job.stages.slice(2).reduce((sum, minutes) => sum + minutes, 0) >= MIN_ENROUTE_COMPLETION_MIN)
+      : jobs
+  const cleanedTrim = { kept: afterBatch, dropped: 0 }
 
   const rawBase = jobs.filter((job) => job.total >= 0)
   const rawTrim = trimOutliers(rawBase)
 
   return {
     stageLabels,
-    cleaned: summarize(cleanedTrim.kept, stageLabels.length, config.minJobs, config.crewNames.length > 0),
-    raw: summarize(rawTrim.kept, stageLabels.length, config.minJobs, config.crewNames.length > 0),
+    cleaned: summarize(cleanedTrim.kept, stageLabels.length, config.minJobs),
+    raw: summarize(rawTrim.kept, stageLabels.length, config.minJobs),
     weatherCleaned: weatherSummary(cleanedTrim.kept),
     weatherRaw: weatherSummary(rawTrim.kept),
     flags,
