@@ -10,6 +10,7 @@ type Props = {
   headers: string[]
   allRows: Row[]
   choiceRows: Row[]
+  crewOptions: { value: string; count: number }[]
   sheets: string[]
   sheetName: string
   headerRow: number
@@ -56,10 +57,6 @@ export function FilterDrawer(props: Props) {
   const extraOptions = useMemo(
     () => (config.extraFilterCol === 'none' ? [] : valueCounts(props.choiceRows, config.extraFilterCol)),
     [props.choiceRows, config.extraFilterCol],
-  )
-  const crewOptions = useMemo(
-    () => (config.crewCol ? valueCounts(props.choiceRows, config.crewCol) : []),
-    [props.choiceRows, config.crewCol],
   )
   const unusedStages = headers.filter((header) => !config.stageCols.includes(header))
 
