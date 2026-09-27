@@ -215,6 +215,8 @@ export type ScatterModel = {
   total: number
 }
 export type CorrModel = { labels: string[]; matrix: (number | null)[][] }
+export type SpeedGroup = { name: string; n: number; median: number; average: number }
+export type SpeedModel = { column: string; groupCol: string; groups: SpeedGroup[]; hidden: number; total: number }
 
 /** Canonical label key for missing category buckets. */
 export const UNASSIGNED_KEY = '__unassigned__'
@@ -344,6 +346,42 @@ export function boxplot(rows: Row[], column: string, groupCol: string): BoxModel
   groups.sort((a, b) => b.median - a.median)
   const sliced = groups.slice(0, 24)
   return { column, groups: sliced, total: sliced.reduce((sum, group) => sum + group.n, 0) }
+}
+
+/** Rank categorical groups by median response time; lower is faster. */
+export function responseSpeed(rows: Row[], column: string, groupCol: string): SpeedModel | null {
+  if (!column || !groupCol || groupCol === 'none') return null
+  const buckets = new Map<string, number[]>()
+  for (const row of rows) {
+    const value = asNumber(row[column])
+    const group = asText(row[groupCol])
+    if (value == null || value < 0 || isMissingCategory(group)) continue
+    const list = buckets.get(group as string)
+    if (list) list.push(value)
+    else buckets.set(group as string, [value])
+  }
+  if (buckets.size === 0) return null
+
+  const ranked = [...buckets.entries()]
+    .map(([name, values]) => {
+      const sorted = [...values].sort((a, b) => a - b)
+      return {
+        name,
+        n: sorted.length,
+        median: quantile(sorted, 0.5),
+        average: sorted.reduce((sum, value) => sum + value, 0) / sorted.length,
+      }
+    })
+    .sort((a, b) => a.median - b.median || a.average - b.average || a.name.localeCompare(b.name))
+
+  const groups = ranked.slice(0, 24)
+  return {
+    column,
+    groupCol,
+    groups,
+    hidden: Math.max(0, ranked.length - groups.length),
+    total: groups.reduce((sum, group) => sum + group.n, 0),
+  }
 }
 
 export function barCounts(

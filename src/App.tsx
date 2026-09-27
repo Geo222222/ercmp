@@ -371,6 +371,7 @@ export function App() {
               selectedCrew={selectedCrew}
               onSelectCrew={setSelectedCrew}
               monthSnapshots={monthSnapshots}
+              periodLabel={activeLabel}
             />
           )}
           {ready && focusTable && view === 'roster' && <RosterView headers={focusTable.headers} rows={combinedRows} />}
