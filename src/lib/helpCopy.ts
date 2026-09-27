@@ -55,6 +55,9 @@ export const HELP = {
   chartsShare:
     'Share mode: arc for the leaders, full ranking below with density bars. Tap an arc wedge, legend row, or rank row to lock focus and inspect sample jobs.',
 
+  chartsSpeed:
+    'Speed mode ranks groups by median response time. Lower is faster; average and job count reveal long delays and sample size.',
+
   chartsDensity:
     'Density mode: numeric distribution as a signal silhouette. Tap a node to lock that bin range and inspect sample jobs.',
 
