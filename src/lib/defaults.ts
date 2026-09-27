@@ -3,6 +3,27 @@ import { categoricalColumns, numericColumns, valueCounts } from './rows'
 
 const DEFAULT_PARISHES_KEY = 'ercmp-default-parishes'
 export const INITIAL_DEFAULT_PARISHES = ['St.Thomas', 'KSAN', 'KSAS']
+export const INITIAL_DEFAULT_CREWS = [
+  'Eric Williams',
+  'Antony Levy',
+  'Kedon Taylor',
+  'Rochaine Palmer',
+  'Milton Charlton',
+  'Elvis Trowers',
+  'Christopher Edwards',
+  'Odeanie Davis',
+  'Fredrick Hamilton',
+  'Andre Smith',
+  'Andree Smith',
+  'Fitzroy Turner',
+  'Dwayne Cohen',
+  'Rochaine Hussey',
+  'Rusean Allen',
+  'Edward Royal',
+  'Derrick Grubb',
+  'Hopeton Henry',
+  'Stephen Taylor',
+]
 
 export function readDefaultParishes(): string[] {
   if (typeof window === 'undefined') return INITIAL_DEFAULT_PARISHES
@@ -61,7 +82,7 @@ export function defaultConfig(table: DataTable, defaultParishes = readDefaultPar
     extraFilterCol: jobType ?? 'none',
     extraFilterVals: [],
     crewCol: crew,
-    crewNames: [],
+    crewNames: INITIAL_DEFAULT_CREWS,
     weatherCol: weather ?? 'none',
     stageCols: defaultStages(headers),
     minJobs: 20,

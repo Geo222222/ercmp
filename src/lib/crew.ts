@@ -43,7 +43,7 @@ export function quantile(values: number[], probability: number): number {
   return sorted[lower - 1] + (h - lower) * (sorted[upper - 1] - sorted[lower - 1])
 }
 
-function summarize(jobs: Job[], stageCount: number, minJobs: number): CrewSummaryRow[] {
+function summarize(jobs: Job[], stageCount: number, minJobs: number, includeAll: boolean): CrewSummaryRow[] {
   const groups = new Map<string, Job[]>()
   for (const job of jobs) {
     const list = groups.get(job.crew)
@@ -53,7 +53,7 @@ function summarize(jobs: Job[], stageCount: number, minJobs: number): CrewSummar
 
   const rows: CrewSummaryRow[] = []
   for (const [crew, list] of groups) {
-    if (list.length < minJobs) continue
+    if (!includeAll && list.length < minJobs) continue
     const totals = list.map((job) => job.total)
     rows.push({
       crew,
@@ -178,8 +178,8 @@ export function buildCrewReport(rows: Row[], config: BoardConfig): CrewReport {
 
   return {
     stageLabels,
-    cleaned: summarize(cleanedTrim.kept, stageLabels.length, config.minJobs),
-    raw: summarize(rawTrim.kept, stageLabels.length, config.minJobs),
+    cleaned: summarize(cleanedTrim.kept, stageLabels.length, config.minJobs, config.crewNames.length > 0),
+    raw: summarize(rawTrim.kept, stageLabels.length, config.minJobs, config.crewNames.length > 0),
     weatherCleaned: weatherSummary(cleanedTrim.kept),
     weatherRaw: weatherSummary(rawTrim.kept),
     flags,
