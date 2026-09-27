@@ -30,7 +30,7 @@ function firstMatch(headers: string[], patterns: RegExp[]): string | null {
 }
 
 function defaultStages(headers: string[]): string[] {
-  const patterns = [/assigned time/i, /acknowle/i, /enroute/i, /on-?site/i, /actual comp/i, /final comp/i]
+  const patterns = [/assigned time/i, /acknowle/i, /enroute/i, /on-?site/i, /actual comp/i]
   const stages: string[] = []
   for (const pattern of patterns) {
     const hit = headers.find((header) => pattern.test(header) && !stages.includes(header))
