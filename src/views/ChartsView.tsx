@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode, type TouchEvent } from 'react'
 import type { BoardConfig, ChartType, Row } from '../types'
-import { BarChart, BoxChart, CorrChart, HistogramChart, ScatterChart } from '../components/StatCharts'
+import { BarChart, BoxChart, CorrChart, HistogramChart, ScatterChart, SpeedChart } from '../components/StatCharts'
 import { Hint } from '../components/Hint'
 import {
   barCounts,
@@ -11,12 +11,14 @@ import {
   isMissingCategory,
   sampleJobHints,
   scatter,
+  responseSpeed,
   UNASSIGNED_KEY,
   type BarModel,
   type BoxModel,
   type CorrModel,
   type HistModel,
   type ScatterModel,
+  type SpeedModel,
 } from '../lib/stats'
 import type { HelpKey } from '../lib/helpCopy'
 import { asNumber, asText, categoricalColumns, numericColumns } from '../lib/rows'
@@ -40,6 +42,13 @@ const TYPES: { id: ChartType; label: string; signal: string; tip: HelpKey; blurb
     signal: 'Signal silhouette',
     tip: 'chartsDensity',
     blurb: 'How response times (or any numeric) spread across the board.',
+  },
+  {
+    id: 'speed',
+    label: 'Speed',
+    signal: 'Fastest ranking',
+    tip: 'chartsSpeed',
+    blurb: 'Compare median and average response time by parish, crew, or another group.',
   },
   {
     id: 'box',
@@ -81,6 +90,7 @@ type FocusState = {
   detail?: string
   countLabel?: string
   shareLabel?: string
+  shareText?: string
 }
 
 export function ChartsView({ headers, rows, config, onChange, periodLabel }: Props) {
@@ -143,6 +153,7 @@ export function ChartsView({ headers, rows, config, onChange, periodLabel }: Pro
     headers: chartHeaders,
     config,
     numeric,
+    categorical,
     selected,
     onSelect: (key) => setSelected(key || null),
     palette,
@@ -183,7 +194,7 @@ export function ChartsView({ headers, rows, config, onChange, periodLabel }: Pro
           <p className="kicker">Charts</p>
           <h2>{heading}</h2>
           <p className="charts-lede">
-            Five instruments on the same filtered jobs — swipe or step the carousel. Timing slides use clocks built from your stage columns.
+            Six instruments on the same filtered jobs — swipe or step the carousel. Timing slides use clocks built from your stage columns.
           </p>
         </div>
         <button type="button" className="ghost" onClick={download} disabled={!chart.svg}>
@@ -231,7 +242,7 @@ export function ChartsView({ headers, rows, config, onChange, periodLabel }: Pro
       </div>
 
       <div className="charts-controls">
-        {config.chartType !== 'corr' && config.chartType !== 'scatter' && (
+        {config.chartType !== 'corr' && config.chartType !== 'scatter' && config.chartType !== 'speed' && (
           <label className="field inline-field">
             <span>{config.chartType === 'bar' ? 'Category' : 'Measure'}</span>
             <select
@@ -275,6 +286,29 @@ export function ChartsView({ headers, rows, config, onChange, periodLabel }: Pro
               ))}
             </select>
           </label>
+        )}
+        {config.chartType === 'speed' && (
+          <div className="split-fields">
+            <label className="field">
+              <span>Response measure</span>
+              <select
+                value={measureChoices.includes(config.chartCol) ? config.chartCol : measureChoices[0] ?? ''}
+                onChange={(event) => onChange({ chartCol: event.target.value })}
+              >
+                {measureChoices.map((column) => (
+                  <option key={column} value={column}>{column}</option>
+                ))}
+              </select>
+            </label>
+            <label className="field">
+              <span>Compare by</span>
+              <select value={config.groupCol} onChange={(event) => onChange({ groupCol: event.target.value })}>
+                {categorical.map((column) => (
+                  <option key={column} value={column}>{column}</option>
+                ))}
+              </select>
+            </label>
+          </div>
         )}
         {config.chartType === 'scatter' && (
           <div className="split-fields">
@@ -347,10 +381,10 @@ function defaultsForMode(
     return patch
   }
 
-  if (type === 'hist' || type === 'box') {
+  if (type === 'hist' || type === 'box' || type === 'speed') {
     const preferred = measures.includes(TOTAL_MINUTES) ? TOTAL_MINUTES : measures[0]
     if (preferred && !measures.includes(current.chartCol)) patch.chartCol = preferred
-    if (type === 'box' && current.groupCol !== 'none' && !categorical.includes(current.groupCol)) {
+    if ((type === 'box' || type === 'speed') && !categorical.includes(current.groupCol)) {
       if (categorical.includes('Parish')) patch.groupCol = 'Parish'
       else if (categorical[0]) patch.groupCol = categorical[0]
       else patch.groupCol = 'none'
@@ -389,11 +423,11 @@ function InstrumentChassis({ children }: { children: ReactNode }) {
 function InspectCard({ focus, onClear }: { focus: FocusState; onClear: () => void }) {
   const sharePct = focus.share == null ? null : Math.max(0, Math.min(100, focus.share * 100))
   const shareDisplay =
-    focus.share == null
+    focus.shareText ?? (focus.share == null
       ? '—'
       : focus.shareLabel === '|r|'
         ? focus.share.toFixed(3)
-        : `${sharePct!.toFixed(1)}%`
+        : `${sharePct!.toFixed(1)}%`)
   return (
     <div className="charts-inspect">
       <div className="charts-inspect-head">
@@ -416,7 +450,7 @@ function InspectCard({ focus, onClear }: { focus: FocusState; onClear: () => voi
           <strong>{shareDisplay}</strong>
         </div>
       </div>
-      {sharePct != null && focus.shareLabel !== '|r|' && (
+      {sharePct != null && !focus.shareText && focus.shareLabel !== '|r|' && (
         <div className="charts-share" aria-hidden="true">
           <div className="charts-share-track">
             <span className="charts-share-fill" style={{ width: `${sharePct}%` }} />
@@ -460,6 +494,7 @@ type RenderArgs = {
   headers: string[]
   config: BoardConfig
   numeric: string[]
+  categorical: string[]
   selected: string | null
   onSelect: (key: string) => void
   palette: { primary: string; secondary: string; warn: string; bad: string; muted: string }
@@ -467,7 +502,7 @@ type RenderArgs = {
 }
 
 function renderChart(args: RenderArgs): { node: ReactNode; svg: boolean; note?: string; focus?: FocusState } {
-  const { rows, headers, config, numeric, selected, onSelect, palette, excludeMissing } = args
+  const { rows, headers, config, numeric, categorical, selected, onSelect, palette, excludeMissing } = args
 
   if (config.chartType === 'corr') {
     const corrCols = numeric.length >= 2 ? numeric : config.analysisCols
@@ -488,6 +523,24 @@ function renderChart(args: RenderArgs): { node: ReactNode; svg: boolean; note?: 
       node: <CorrChart model={model} selected={selected} onSelect={onSelect} palette={palette} />,
       focus: corrFocus(model, selected),
       note: 'Link matrix — tap a cell for pair strength. Strong |r| glows.',
+    }
+  }
+
+  if (config.chartType === 'speed') {
+    const col = numeric.includes(config.chartCol) ? config.chartCol : numeric[0]
+    const groupCol = categorical.includes(config.groupCol) ? config.groupCol : categorical[0]
+    const model = col && groupCol ? responseSpeed(rows, col, groupCol) : null
+    if (!model) {
+      return {
+        svg: false,
+        node: <EmptyInstrument title="Need response groups" body="Choose a timing measure and a category such as Parish or Crew." />,
+      }
+    }
+    return {
+      svg: true,
+      node: <SpeedChart model={model} selected={selected} onSelect={onSelect} palette={palette} />,
+      focus: speedFocus(model, rows, headers, selected),
+      note: `Fastest median ${model.groups[0]?.median.toFixed(1)} min · hollow marker shows average · lower is faster.`,
     }
   }
 
@@ -618,6 +671,28 @@ function barFocus(model: BarModel, rows: Row[], headers: string[], selected: str
       headers,
     ),
     detail: item.label === UNASSIGNED_KEY ? 'Blank / null / n/a values in this column.' : undefined,
+  }
+}
+
+function speedFocus(model: SpeedModel, rows: Row[], headers: string[], selected: string | null): FocusState | undefined {
+  if (!selected) return undefined
+  const group = model.groups.find((entry) => entry.name === selected)
+  if (!group) return undefined
+  return {
+    title: categoryLabel(group.name),
+    subtitle: `${model.column} by ${model.groupCol}`,
+    count: group.n,
+    share: null,
+    countLabel: 'Jobs',
+    shareLabel: 'Median',
+    shareText: `${group.median.toFixed(1)} min`,
+    samples: sampleJobHints(
+      rows,
+      (row) => asText(row[model.groupCol]) === group.name && asNumber(row[model.column]) != null,
+      4,
+      headers,
+    ),
+    detail: `Median ${group.median.toFixed(1)} min · average ${group.average.toFixed(1)} min · ranked ${model.groups.findIndex((entry) => entry.name === group.name) + 1} of ${model.groups.length}`,
   }
 }
 

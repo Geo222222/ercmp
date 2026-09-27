@@ -1,5 +1,5 @@
 import type { KeyboardEvent, ReactNode } from 'react'
-import type { BarModel, BoxModel, CorrModel, HistModel, ScatterModel } from '../lib/stats'
+import type { BarModel, BoxModel, CorrModel, HistModel, ScatterModel, SpeedModel } from '../lib/stats'
 import { categoryLabel } from '../lib/stats'
 import { ellipsize, formatInt } from '../lib/format'
 
@@ -394,6 +394,59 @@ export function HistogramChart({ model, selected, onSelect, palette }: { model: 
         <text x={width - pad.r} y={28} textAnchor="end" className="hud-callout">
           peak {formatInt(model.bins[peakIndex]?.n ?? 0)}
         </text>
+      </svg>
+    </InstrumentShell>
+  )
+}
+
+/** Median-first response ranking with average and sample size alongside. */
+export function SpeedChart({ model, selected, onSelect, palette }: { model: SpeedModel } & Selectable) {
+  const width = 760
+  const rowH = 42
+  const pad = { l: 180, r: 170, t: 54, b: 28 }
+  const height = Math.max(250, pad.t + model.groups.length * rowH + pad.b)
+  const plotW = width - pad.l - pad.r
+  const max = Math.max(...model.groups.flatMap((group) => [group.median, group.average]), 1)
+  const fast = palette?.primary ?? 'var(--good)'
+  const slow = palette?.bad ?? 'var(--bad)'
+
+  return (
+    <InstrumentShell label="response-speed">
+      <svg viewBox={`0 0 ${width} ${height}`} width={width} height={height} role="img" aria-label={`${model.column} response speed by ${model.groupCol}`}>
+        <text x={16} y={24} className="hud-kicker">
+          RESPONSE SPEED · FASTEST MEDIAN FIRST
+        </text>
+        <text x={width - 16} y={24} textAnchor="end" className="hud-micro">
+          MEDIAN · AVG · JOBS
+        </text>
+        {model.groups.map((group, index) => {
+          const y = pad.t + index * rowH
+          const medianW = (group.median / max) * plotW
+          const averageX = pad.l + (group.average / max) * plotW
+          const key = group.name
+          const isSelected = selected === key
+          const active = !selected || isSelected
+          const color = mixStops(fast, slow, model.groups.length <= 1 ? 0 : index / (model.groups.length - 1))
+          return (
+            <g key={key} opacity={active ? 1 : 0.2} className="bar-row" {...rowHandlers(key, selected, onSelect)}>
+              {isSelected && <rect x={8} y={y - 7} width={width - 16} height={34} rx={6} className="bar-row-focus" />}
+              <text x={18} y={y + 14} className="hud-micro">{String(index + 1).padStart(2, '0')}</text>
+              <text x={48} y={y + 14} className={isSelected ? 'hud-rail-label hot' : 'hud-rail-label'}>
+                {ellipsize(categoryLabel(group.name), 18)}
+              </text>
+              <line x1={pad.l} x2={pad.l + plotW} y1={y + 10} y2={y + 10} stroke="var(--line)" strokeWidth={8} strokeLinecap="round" />
+              <line x1={pad.l} x2={pad.l + medianW} y1={y + 10} y2={y + 10} stroke={color} strokeWidth={8} strokeLinecap="round" />
+              <circle cx={averageX} cy={y + 10} r={5} fill="var(--panel-2)" stroke={color} strokeWidth={2} />
+              <text x={width - 142} y={y + 14} textAnchor="end" className="hud-callout">{group.median.toFixed(1)}m</text>
+              <text x={width - 76} y={y + 14} textAnchor="end" className="hud-micro">{group.average.toFixed(1)}m</text>
+              <text x={width - 16} y={y + 14} textAnchor="end" className="hud-micro">n={formatInt(group.n)}</text>
+              <title>{categoryLabel(group.name)}: median {group.median.toFixed(1)} min, average {group.average.toFixed(1)} min, {group.n} jobs</title>
+            </g>
+          )
+        })}
+        {model.hidden > 0 && (
+          <text x={16} y={height - 8} className="hud-micro">+{formatInt(model.hidden)} slower groups not shown</text>
+        )}
       </svg>
     </InstrumentShell>
   )
