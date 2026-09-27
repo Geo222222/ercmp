@@ -200,19 +200,29 @@
   display: none;
 }
 
-.month-chip {
+.month-chip-wrap {
   --month-chip-min: 48px;
+  position: relative;
+  flex: 0 0 auto;
+  min-width: 8rem;
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  background: color-mix(in srgb, var(--bg) 55%, var(--panel));
+  transition: border-color 120ms ease, background 120ms ease, box-shadow 120ms ease, transform 120ms ease;
+}
+
+.month-chip {
   display: inline-grid;
   grid-template-columns: auto 1fr;
   grid-template-rows: auto auto;
   column-gap: 10px;
   align-items: center;
   min-height: var(--month-chip-min);
-  min-width: 8rem;
-  padding: 10px 14px;
-  border: 1px solid var(--line);
-  border-radius: 5px;
-  background: color-mix(in srgb, var(--bg) 55%, var(--panel));
+  width: 100%;
+  padding: 10px 36px 10px 14px;
+  border: 0;
+  border-radius: inherit;
+  background: transparent;
   color: var(--text);
   text-align: left;
   cursor: pointer;
@@ -220,14 +230,14 @@
   transition: border-color 120ms ease, background 120ms ease, box-shadow 120ms ease, transform 120ms ease;
 }
 
-.month-chip:hover,
-.month-chip:focus-visible {
+.month-chip-wrap:hover,
+.month-chip-wrap:focus-within {
   border-color: var(--line-strong);
   outline: none;
   transform: translateY(-1px);
 }
 
-.month-chip.on {
+.month-chip-wrap.on {
   border-color: color-mix(in srgb, var(--accent) 65%, var(--line-strong));
   background: color-mix(in srgb, var(--accent) 18%, var(--panel));
   box-shadow:
@@ -235,9 +245,37 @@
     0 6px 16px color-mix(in srgb, var(--accent) 12%, transparent);
 }
 
-.month-chip.focus {
+.month-chip-wrap.focus {
   outline: 2px solid color-mix(in srgb, var(--accent) 55%, transparent);
   outline-offset: 2px;
+}
+
+.month-chip-remove {
+  position: absolute;
+  top: 50%;
+  right: 7px;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--muted);
+  font-size: 20px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.month-chip-remove:hover,
+.month-chip-remove:focus-visible {
+  outline: none;
+  background: color-mix(in srgb, var(--bad) 16%, transparent);
+  color: var(--bad);
+}
+
+.month-chip-remove:disabled {
+  opacity: 0.28;
+  cursor: not-allowed;
 }
 
 .month-chip-swatch {
@@ -262,7 +300,7 @@
   line-height: 1.2;
 }
 
-.month-chip[aria-pressed='false'] {
+.month-chip-wrap:has(.month-chip[aria-pressed='false']) {
   opacity: 0.58;
 }
 
@@ -492,7 +530,7 @@
     height: 48px;
   }
 
-  .month-chip {
+  .month-chip-wrap {
     min-width: 7rem;
   }
 

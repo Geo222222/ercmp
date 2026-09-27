@@ -308,6 +308,7 @@ export function App() {
               onFocus={setFocusMonthId}
               onSelectAll={() => setMonthFilter(months.map((item) => item.id))}
               onSelectOnly={(id) => setMonthFilter([id])}
+              onRemove={removeMonth}
               onFiles={ingestFiles}
             />
             <ThemeOrb theme={theme} onTheme={setTheme} />

@@ -10,6 +10,7 @@ type Props = {
   onFocus: (id: string) => void
   onSelectAll: () => void
   onSelectOnly: (id: string) => void
+  onRemove: (id: string) => void
   onFiles: (files: File[]) => void
 }
 
@@ -20,6 +21,7 @@ export function MonthsOrb({
   onFocus,
   onSelectAll,
   onSelectOnly,
+  onRemove,
   onFiles,
 }: Props) {
   const [open, setOpen] = useState(false)
@@ -81,6 +83,7 @@ export function MonthsOrb({
               onFocus={onFocus}
               onSelectAll={onSelectAll}
               onSelectOnly={onSelectOnly}
+              onRemove={onRemove}
               onFiles={onFiles}
               compact
             />

@@ -10,6 +10,7 @@ type Props = {
   onFocus: (id: string) => void
   onSelectAll: () => void
   onSelectOnly: (id: string) => void
+  onRemove: (id: string) => void
   onFiles: (files: File[]) => void
   /** Tighter layout when hosted inside the months sheet. */
   compact?: boolean
@@ -22,6 +23,7 @@ export function MonthRail({
   onFocus,
   onSelectAll,
   onSelectOnly,
+  onRemove,
   onFiles,
   compact = false,
 }: Props) {
@@ -116,30 +118,44 @@ export function MonthRail({
           </div>
           <div className="month-chips" role="group" aria-label="Active months">
             {months.map((month, index) => (
-              <button
+              <div
                 key={month.id}
-                type="button"
-                className={`month-chip${month.active ? ' on' : ''}${focusMonthId === month.id ? ' focus' : ''}`}
+                className={`month-chip-wrap${month.active ? ' on' : ''}${focusMonthId === month.id ? ' focus' : ''}`}
                 style={{ ['--month-tone' as string]: monthTone(index) }}
-                aria-pressed={month.active}
-                title={`${month.fileName} · ${rangeNote(month.range)} · double-click = only this month`}
-                onClick={() => {
-                  onToggle(month.id)
-                  onFocus(month.id)
-                }}
-                onDoubleClick={(event) => {
-                  event.preventDefault()
-                  onSelectOnly(month.id)
-                  onFocus(month.id)
-                }}
               >
-                <span className="month-chip-swatch" aria-hidden="true" />
-                <strong>{month.label}</strong>
-                <small>
-                  {rangeNote(month.range)}
-                  {month.active ? '' : ' · off'}
-                </small>
-              </button>
+                <button
+                  type="button"
+                  className="month-chip"
+                  aria-pressed={month.active}
+                  title={`${month.fileName} · ${rangeNote(month.range)} · double-click = only this month`}
+                  onClick={() => {
+                    onToggle(month.id)
+                    onFocus(month.id)
+                  }}
+                  onDoubleClick={(event) => {
+                    event.preventDefault()
+                    onSelectOnly(month.id)
+                    onFocus(month.id)
+                  }}
+                >
+                  <span className="month-chip-swatch" aria-hidden="true" />
+                  <strong>{month.label}</strong>
+                  <small>
+                    {rangeNote(month.range)}
+                    {month.active ? '' : ' · off'}
+                  </small>
+                </button>
+                <button
+                  type="button"
+                  className="month-chip-remove"
+                  aria-label={`Remove ${month.label}`}
+                  title={months.length <= 1 ? 'At least one month must remain loaded' : `Remove ${month.label}`}
+                  disabled={months.length <= 1}
+                  onClick={() => onRemove(month.id)}
+                >
+                  <span aria-hidden="true">×</span>
+                </button>
+              </div>
             ))}
           </div>
         </>
