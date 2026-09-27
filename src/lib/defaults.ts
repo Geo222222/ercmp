@@ -6,7 +6,7 @@ export const INITIAL_DEFAULT_PARISHES = ['St.Thomas', 'KSAN', 'KSAS']
 export const INITIAL_DEFAULT_CREWS = [
   'Eric Williams',
   'Antony Levy',
-  'Kedon Taylor',
+  'Kaydon Taylor',
   'Rochaine Palmer',
   'Milton Charlton',
   'Elvis Trowers',
@@ -14,7 +14,6 @@ export const INITIAL_DEFAULT_CREWS = [
   'Odeanie Davis',
   'Fredrick Hamilton',
   'Andre Smith',
-  'Andree Smith',
   'Fitzroy Turner',
   'Dwayne Cohen',
   'Rochaine Hussey',
