@@ -10,7 +10,7 @@ type Props = {
   headers: string[]
   allRows: Row[]
   choiceRows: Row[]
-  crewOptions: { value: string; count: number }[]
+  crewOptions?: { value: string; count: number }[]
   sheets: string[]
   sheetName: string
   headerRow: number
@@ -58,6 +58,7 @@ export function FilterDrawer(props: Props) {
     () => (config.extraFilterCol === 'none' ? [] : valueCounts(props.choiceRows, config.extraFilterCol)),
     [props.choiceRows, config.extraFilterCol],
   )
+  const crewOptions = props.crewOptions ?? (config.crewCol ? valueCounts(props.choiceRows, config.crewCol) : [])
   const unusedStages = headers.filter((header) => !config.stageCols.includes(header))
 
   return (
