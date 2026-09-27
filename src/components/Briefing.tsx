@@ -238,11 +238,11 @@ function buildAccounting(counts: CrewCounts, mode: CleaningMode): {
         { label: 'In filters', value: formatInt(counts.filtered) },
         { label: 'Complete stamps', value: formatInt(counts.complete) },
         { label: 'Clock reverse', value: formatInt(counts.negative) },
-        { label: 'Batch stamps', value: formatInt(counts.droppedBatch) },
+        { label: 'Short completions', value: formatInt(counts.droppedBatch) },
         { label: 'Slowest 1%', value: formatInt(counts.droppedOutlierCleaned) },
         { label: 'Remain', value: formatInt(counts.cleaned) },
       ],
-      note: 'Field-cleaned drops backward clocks (>15 min), batch stamps (<4 min between stages), and the slowest 1% before the minimum-jobs cut.',
+      note: 'The board uses every complete job except Enroute-to-completion times under 5 minutes. Backward clocks remain visible and are flagged below.',
     }
   }
 

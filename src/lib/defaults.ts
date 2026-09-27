@@ -1,5 +1,45 @@
 import type { BoardConfig, DataTable } from '../types'
-import { categoricalColumns, numericColumns } from './rows'
+import { categoricalColumns, numericColumns, valueCounts } from './rows'
+
+const DEFAULT_PARISHES_KEY = 'ercmp-default-parishes'
+export const INITIAL_DEFAULT_PARISHES = ['St.Thomas', 'KSAN', 'KSAS']
+export const INITIAL_DEFAULT_CREWS = [
+  'Eric Williams',
+  'Antony Levy',
+  'Kaydon Taylor',
+  'Rochaine Palmer',
+  'Milton Charlton',
+  'Elvis Trowers',
+  'Christopher Edwards',
+  'Odeanie Davis',
+  'Fredrick Hamilton',
+  'Andre Smith',
+  'Fitzroy Turner',
+  'Dwayne Cohen',
+  'Rochaine Hussey',
+  'Rusean Allen',
+  'Edward Royal',
+  'Derrick Grubb',
+  'Hopeton Henry',
+  'Stephen Taylor',
+]
+
+export function readDefaultParishes(): string[] {
+  if (typeof window === 'undefined') return INITIAL_DEFAULT_PARISHES
+  try {
+    const stored = window.localStorage.getItem(DEFAULT_PARISHES_KEY)
+    if (stored == null) return INITIAL_DEFAULT_PARISHES
+    const parsed = JSON.parse(stored)
+    return Array.isArray(parsed) && parsed.every((value) => typeof value === 'string') ? parsed : INITIAL_DEFAULT_PARISHES
+  } catch {
+    return INITIAL_DEFAULT_PARISHES
+  }
+}
+
+export function writeDefaultParishes(values: string[]) {
+  if (typeof window === 'undefined') return
+  window.localStorage.setItem(DEFAULT_PARISHES_KEY, JSON.stringify(values))
+}
 
 function firstMatch(headers: string[], patterns: RegExp[]): string | null {
   for (const pattern of patterns) {
@@ -19,7 +59,7 @@ function defaultStages(headers: string[]): string[] {
   return stages
 }
 
-export function defaultConfig(table: DataTable): BoardConfig {
+export function defaultConfig(table: DataTable, defaultParishes = readDefaultParishes()): BoardConfig {
   const { headers, rows } = table
   const numeric = numericColumns(headers, rows)
   const categorical = categoricalColumns(headers, rows)
@@ -32,17 +72,19 @@ export function defaultConfig(table: DataTable): BoardConfig {
   )
   const analysisCols = numeric.length > 0 ? numeric : preferredAnalysis.length > 0 ? preferredAnalysis : headers.slice(0, 4)
   const chartCol = headers.includes('Parish') ? 'Parish' : (categorical[0] ?? headers[0] ?? '')
+  const parishValues = new Set(parish ? valueCounts(rows, parish).map((option) => option.value) : [])
+  const initialParishes = defaultParishes.filter((value) => parishValues.has(value))
 
   return {
     globalFilterCol: parish ?? 'none',
-    globalFilterVals: [],
+    globalFilterVals: initialParishes,
     extraFilterCol: jobType ?? 'none',
     extraFilterVals: [],
     crewCol: crew,
-    crewNames: [],
+    crewNames: INITIAL_DEFAULT_CREWS,
     weatherCol: weather ?? 'none',
     stageCols: defaultStages(headers),
-    minJobs: 1,
+    minJobs: 20,
     analysisCols,
     groupCol: parish ?? 'none',
     chartType: 'bar',

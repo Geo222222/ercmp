@@ -17,7 +17,7 @@ export const HELP = {
     'Orders the smart list. Clock sorts use first→last timestamp columns when those exist.',
 
   fieldCleaned:
-    'Field-cleaned drops jobs with stage or total clocks more than 15 minutes backward, later stage gaps under 4 minutes (batch stamps — the first gap is allowed to be short), and the slowest 1% by total time.',
+    'The board uses every complete job except Enroute-to-completion times under 5 minutes. Backward clocks remain visible and are flagged in Data Quality.',
 
   rawClocks:
     'Raw clocks keep per-stage quirks. Only jobs with a negative overall total are removed, then the slowest 1% by total time — closer to the earlier, simpler board.',

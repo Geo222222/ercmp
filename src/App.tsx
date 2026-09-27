@@ -10,7 +10,7 @@ import {
   refreshMonthRange,
   sortMonthDatasets,
 } from './lib/excel'
-import { defaultConfig } from './lib/defaults'
+import { defaultConfig, readDefaultParishes, writeDefaultParishes } from './lib/defaults'
 import { filterRows, valueCounts } from './lib/rows'
 import { buildCrewReport } from './lib/crew'
 import { formatInt } from './lib/format'
@@ -43,6 +43,7 @@ export function App() {
   const [mode, setMode] = useState<CleaningMode>('cleaned')
   const [selectedCrew, setSelectedCrew] = useState<string | null>(null)
   const [theme, setTheme] = useState<ThemeId>(() => readTheme())
+  const [defaultParishes, setDefaultParishes] = useState<string[]>(() => readDefaultParishes())
 
   useEffect(() => {
     applyTheme(theme)
@@ -114,16 +115,18 @@ export function App() {
 
   useEffect(() => {
     if (!focusTable || !focusMonth || appliedKey === tableKey) return
-    setConfig(defaultConfig(focusTable))
+    setConfig(defaultConfig(focusTable, defaultParishes))
     setAppliedKey(tableKey)
     setSelectedCrew(null)
     setMode('cleaned')
     setMonths((prev) =>
       prev.map((item) =>
-        item.id === focusMonth.id ? refreshMonthRange({ ...item, headerRow: focusMonth.headerRow }, defaultConfig(focusTable).stageCols) : item,
+        item.id === focusMonth.id
+          ? refreshMonthRange({ ...item, headerRow: focusMonth.headerRow }, defaultConfig(focusTable, defaultParishes).stageCols)
+          : item,
       ),
     )
-  }, [focusTable, focusMonth, tableKey, appliedKey])
+  }, [focusTable, focusMonth, tableKey, appliedKey, defaultParishes])
 
   const ready = Boolean(focusTable && config && appliedKey === tableKey && focusMonth)
 
@@ -430,6 +433,7 @@ export function App() {
             headerRow={focusMonth.headerRow}
             fileName={focusMonth.fileName}
             config={config}
+            defaultParishes={defaultParishes}
             months={months}
             focusMonthId={focusMonth.id}
             onFocusMonth={setFocusMonthId}
@@ -439,10 +443,18 @@ export function App() {
             onSheet={(name) => updateFocusMonth({ sheetName: name })}
             onHeaderRow={(row) => updateFocusMonth({ headerRow: row })}
             onChange={(patch) => setConfig((current) => (current ? { ...current, ...patch } : current))}
+            onDefaultParishes={(values) => {
+              setDefaultParishes(values)
+              writeDefaultParishes(values)
+              const col = parishColumn(focusTable.headers, config)
+              setConfig((current) =>
+                current && col ? { ...current, globalFilterCol: col, globalFilterVals: values } : current,
+              )
+            }}
             onUpload={onUpload}
             onUploadMany={ingestFiles}
             onReset={() => {
-              if (focusTable) setConfig(defaultConfig(focusTable))
+              if (focusTable) setConfig(defaultConfig(focusTable, defaultParishes))
             }}
             onClose={() => setDrawer(false)}
           />

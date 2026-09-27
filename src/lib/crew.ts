@@ -4,7 +4,7 @@ import { roundTo } from './format'
 import { asText } from './rows'
 
 const NEGATIVE_THRESHOLD_MIN = -15
-const BATCH_STAMP_MIN = 4
+const MIN_ENROUTE_COMPLETION_MIN = 5
 const OUTLIER_QUANTILE = 0.99
 
 type Job = {
@@ -168,10 +168,10 @@ export function buildCrewReport(rows: Row[], config: BoardConfig): CrewReport {
 
   const withoutNegative = jobs.filter((job) => !job.negative)
   const afterBatch =
-    stageLabels.length > 1
-      ? withoutNegative.filter((job) => job.stages.slice(1).every((minutes) => minutes >= BATCH_STAMP_MIN))
-      : withoutNegative
-  const cleanedTrim = trimOutliers(afterBatch)
+    stageLabels.length >= 3
+      ? jobs.filter((job) => job.stages.slice(2).reduce((sum, minutes) => sum + minutes, 0) >= MIN_ENROUTE_COMPLETION_MIN)
+      : jobs
+  const cleanedTrim = { kept: afterBatch, dropped: 0 }
 
   const rawBase = jobs.filter((job) => job.total >= 0)
   const rawTrim = trimOutliers(rawBase)

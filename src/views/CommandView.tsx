@@ -127,7 +127,7 @@ export function CommandView({
             <button type="button" className={mode === 'cleaned' ? 'mode on' : 'mode'} onClick={() => onMode('cleaned')}>
               <span>Field-cleaned</span>
               <strong>{formatInt(report.counts.cleaned)}</strong>
-              <small>batch stamps removed</small>
+              <small>short completions removed</small>
             </button>
             <button type="button" className={mode === 'raw' ? 'mode on' : 'mode'} onClick={() => onMode('raw')}>
               <span>Raw clocks</span>
