@@ -6,6 +6,7 @@ import { downloadCsv } from '../lib/download'
 import { dateStamp, displayValue, formatDuration, formatInt, shortStage } from '../lib/format'
 import { monthTone, rangeNote } from '../lib/excel'
 import { themePalette } from '../lib/theme'
+import { downloadMonthlyReport } from '../lib/monthlyReport'
 import { Hint, LabelHint } from '../components/Hint'
 
 type ChartMode = 'stages' | 'avg' | 'total' | 'weather'
@@ -20,6 +21,7 @@ type Props = {
   onSelectCrew: (crew: string | null) => void
   /** Per-active-month reports for side-by-side comparison (1 = single-month mode). */
   monthSnapshots?: MonthSnapshot[]
+  periodLabel?: string
 }
 
 type Severity = 'critical' | 'high' | 'watch'
@@ -45,6 +47,7 @@ export function CommandView({
   selectedCrew,
   onSelectCrew,
   monthSnapshots = [],
+  periodLabel = 'Current working set',
 }: Props) {
   const [chartMode, setChartMode] = useState<ChartMode>('stages')
   const [showTable, setShowTable] = useState(false)
@@ -157,6 +160,9 @@ export function CommandView({
             </div>
           </div>
         </div>
+        <button type="button" className="ghost" onClick={() => downloadMonthlyReport(periodLabel, report, config, mode)}>
+          Monthly report
+        </button>
       </div>
 
       {report.error && <p className="banner">{report.error}</p>}
