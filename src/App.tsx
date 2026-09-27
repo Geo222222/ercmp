@@ -154,6 +154,11 @@ export function App() {
     return filterRows(focusTable.rows, config.globalFilterCol, config.globalFilterVals)
   }, [focusTable, config])
 
+  const activeCrewOptions = useMemo(
+    () => (config?.crewCol ? valueCounts(combinedRows, config.crewCol) : []),
+    [combinedRows, config?.crewCol],
+  )
+
   const report = useMemo(() => {
     if (!config) return null
     return buildCrewReport(combinedRows, config)
@@ -429,6 +434,7 @@ export function App() {
             headers={focusTable.headers}
             allRows={focusTable.rows}
             choiceRows={focusGloballyFiltered}
+            crewOptions={activeCrewOptions}
             sheets={focusMonth.sheets.map((item) => item.name)}
             sheetName={focusMonth.sheetName}
             headerRow={focusMonth.headerRow}
