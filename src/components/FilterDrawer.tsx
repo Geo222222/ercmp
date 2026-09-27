@@ -3,6 +3,7 @@ import type { BoardConfig, MonthDataset, Row } from '../types'
 import { displayValue, formatInt } from '../lib/format'
 import { rangeNote } from '../lib/excel'
 import { valueCounts } from '../lib/rows'
+import { parishColumn } from '../lib/parishGeo'
 import { LabelHint } from './Hint'
 
 type Props = {
@@ -14,6 +15,7 @@ type Props = {
   headerRow: number
   fileName: string
   config: BoardConfig
+  defaultParishes: string[]
   months: MonthDataset[]
   focusMonthId: string
   onFocusMonth: (id: string) => void
@@ -23,6 +25,7 @@ type Props = {
   onSheet: (name: string) => void
   onHeaderRow: (row: number) => void
   onChange: (patch: Partial<BoardConfig>) => void
+  onDefaultParishes: (values: string[]) => void
   onUpload: (file: File) => void
   onUploadMany: (files: File[]) => void
   onReset: () => void
@@ -44,6 +47,11 @@ export function FilterDrawer(props: Props) {
   const globalOptions = useMemo(
     () => (config.globalFilterCol === 'none' ? [] : valueCounts(props.allRows, config.globalFilterCol)),
     [props.allRows, config.globalFilterCol],
+  )
+  const defaultParishCol = parishColumn(headers, config)
+  const defaultParishOptions = useMemo(
+    () => (defaultParishCol ? valueCounts(props.allRows, defaultParishCol) : []),
+    [props.allRows, defaultParishCol],
   )
   const extraOptions = useMemo(
     () => (config.extraFilterCol === 'none' ? [] : valueCounts(props.choiceRows, config.extraFilterCol)),
@@ -155,6 +163,16 @@ export function FilterDrawer(props: Props) {
             />
             <p className="hint">Row that holds the column names. This workbook uses row 3, under the title.</p>
           </label>
+
+          {defaultParishCol && (
+            <ValuePicker
+              label="Default parishes"
+              options={defaultParishOptions}
+              selected={props.defaultParishes}
+              onChange={props.onDefaultParishes}
+              hint="Saved for refresh and Reset. Choose All to start with every parish."
+            />
+          )}
 
           <label className="field">
             <span>
@@ -336,11 +354,13 @@ function ValuePicker({
   options,
   selected,
   onChange,
+  hint,
 }: {
   label: string
   options: { value: string; count: number }[]
   selected: string[]
   onChange: (values: string[]) => void
+  hint?: string
 }) {
   const [query, setQuery] = useState('')
   const merged = useMemo(() => {
@@ -363,7 +383,9 @@ function ValuePicker({
           All
         </button>
       </div>
-      <p className="hint">{selected.length === 0 ? 'Empty selection includes every value.' : `${selected.length} selected`}</p>
+      <p className="hint">
+        {hint ?? (selected.length === 0 ? 'Empty selection includes every value.' : `${selected.length} selected`)}
+      </p>
       {useChips ? (
         <div className="chip-wrap">
           {merged.map((option) => (
