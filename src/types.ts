@@ -99,6 +99,13 @@ export type FlagRow = {
   jobs: number
 }
 
+export type ParishContributor = {
+  parish: string
+  crew: string
+  jobs: number
+  totalMinutes: number
+}
+
 export type CrewCounts = {
   filtered: number
   complete: number
@@ -117,6 +124,7 @@ export type CrewReport = {
   weatherCleaned: WeatherRow[]
   weatherRaw: WeatherRow[]
   flags: FlagRow[]
+  parishContributors: ParishContributor[]
   counts: CrewCounts
   error: string | null
 }

@@ -1,4 +1,4 @@
-import type { BoardConfig, CrewCounts, CrewReport, CrewSummaryRow, FlagRow, Row, WeatherRow } from '../types'
+import type { BoardConfig, CrewCounts, CrewReport, CrewSummaryRow, FlagRow, ParishContributor, Row, WeatherRow } from '../types'
 import { formatYearMonth, minutesBetween, parseFlexibleDatetime } from './datetime'
 import { roundTo } from './format'
 import { asText } from './rows'
@@ -15,6 +15,7 @@ type Job = {
   stages: number[]
   total: number
   negative: boolean
+  parish: string
 }
 
 function mean(values: number[]): number {
@@ -117,6 +118,7 @@ export function buildCrewReport(rows: Row[], config: BoardConfig): CrewReport {
     weatherCleaned: [],
     weatherRaw: [],
     flags: [],
+    parishContributors: [],
   }
 
   if (!config.crewCol || stageCols.length < 2) {
@@ -137,6 +139,7 @@ export function buildCrewReport(rows: Row[], config: BoardConfig): CrewReport {
   }
 
   const stageLabels = stageCols.slice(0, -1).map((column, index) => `${column} -> ${stageCols[index + 1]}`)
+  const parishColumn = Object.keys(rows[0] ?? {}).find((column) => /parish/i.test(column))
   const jobs: Job[] = []
 
   for (const row of filtered) {
@@ -160,6 +163,7 @@ export function buildCrewReport(rows: Row[], config: BoardConfig): CrewReport {
       stages,
       total,
       negative,
+      parish: asText(parishColumn ? row[parishColumn] : undefined) ?? 'Unassigned',
     })
   }
 
@@ -172,6 +176,24 @@ export function buildCrewReport(rows: Row[], config: BoardConfig): CrewReport {
     else flagGroups.set(key, { crew: job.crew, month: job.month, jobs: 1 })
   }
   const flags = [...flagGroups.values()].filter((flag) => flag.jobs > 2).sort((a, b) => b.jobs - a.jobs)
+  const contributorGroups = new Map<string, ParishContributor>()
+  for (const job of jobs) {
+    const key = `${job.parish}\0${job.crew}`
+    const current = contributorGroups.get(key)
+    if (current) {
+      current.jobs += 1
+      current.totalMinutes += job.total
+    } else {
+      contributorGroups.set(key, { parish: job.parish, crew: job.crew, jobs: 1, totalMinutes: job.total })
+    }
+  }
+  const parishContributors = [...contributorGroups.values()]
+    .sort((a, b) => b.totalMinutes - a.totalMinutes)
+    .reduce<ParishContributor[]>((result, item) => {
+      const count = result.filter((entry) => entry.parish === item.parish).length
+      if (count < 3) result.push(item)
+      return result
+    }, [])
 
   const withoutNegative = jobs.filter((job) => !job.negative)
   const afterBatch =
@@ -190,6 +212,7 @@ export function buildCrewReport(rows: Row[], config: BoardConfig): CrewReport {
     weatherCleaned: weatherSummary(cleanedTrim.kept),
     weatherRaw: weatherSummary(rawTrim.kept),
     flags,
+    parishContributors,
     counts: {
       filtered: filtered.length,
       complete: jobs.length,
