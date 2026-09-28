@@ -488,6 +488,22 @@ function MonthComparePanel({
                   <b>{formatInt(snap.report.flags.length)}</b>
                 </p>
               </div>
+              <div className="month-team-load" aria-label={`${snap.label} assigned jobs by team`}>
+                <p className="kicker">Assigned jobs by team</p>
+                <div className="month-team-load-grid">
+                  {(['in-house', 'contractor'] as const).map((team) => {
+                    const assigned = snap.assignedJobsByTeam[team]
+                    const included = snap.includedJobsByTeam[team]
+                    return (
+                      <div key={team}>
+                        <span>{team === 'in-house' ? 'In-house' : 'Contractor'}</span>
+                        <strong>{formatInt(assigned)}</strong>
+                        <small>{formatInt(Math.max(assigned - included, 0))} omitted</small>
+                      </div>
+                    )
+                  })}
+                </div>
+              </div>
               {fastest && (
                 <button type="button" className="text-btn" onClick={() => onSelectCrew(fastest.crew)}>
                   Focus {fastest.crew}
