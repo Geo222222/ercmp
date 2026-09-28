@@ -16,6 +16,8 @@ type Job = {
   total: number
   negative: boolean
   parish: string
+  acknowledgedAt: Date
+  completedAt: Date
 }
 
 function mean(values: number[]): number {
@@ -118,6 +120,7 @@ export function buildCrewReport(rows: Row[], config: BoardConfig): CrewReport {
     weatherCleaned: [],
     weatherRaw: [],
     flags: [],
+    overlapFlags: [],
     parishContributors: [],
   }
 
@@ -164,6 +167,8 @@ export function buildCrewReport(rows: Row[], config: BoardConfig): CrewReport {
       total,
       negative,
       parish: asText(parishColumn ? row[parishColumn] : undefined) ?? 'Unassigned',
+      acknowledgedAt: stamped[1],
+      completedAt: stamped[stamped.length - 1],
     })
   }
 
@@ -176,6 +181,23 @@ export function buildCrewReport(rows: Row[], config: BoardConfig): CrewReport {
     else flagGroups.set(key, { crew: job.crew, month: job.month, jobs: 1 })
   }
   const flags = [...flagGroups.values()].filter((flag) => flag.jobs > 2).sort((a, b) => b.jobs - a.jobs)
+  const overlapGroups = new Map<string, FlagRow>()
+  const byCrew = new Map<string, Job[]>()
+  jobs.forEach((job) => byCrew.set(job.crew, [...(byCrew.get(job.crew) ?? []), job]))
+  for (const crewJobs of byCrew.values()) {
+    const ordered = crewJobs.slice().sort((a, b) => a.acknowledgedAt.getTime() - b.acknowledgedAt.getTime())
+    let previousCompletion: Date | null = null
+    for (const job of ordered) {
+      if (previousCompletion && job.acknowledgedAt < previousCompletion) {
+        const key = `${job.crew}\0${job.month}`
+        const existing = overlapGroups.get(key)
+        if (existing) existing.jobs += 1
+        else overlapGroups.set(key, { crew: job.crew, month: job.month, jobs: 1 })
+      }
+      if (!previousCompletion || job.completedAt > previousCompletion) previousCompletion = job.completedAt
+    }
+  }
+  const overlapFlags = [...overlapGroups.values()].filter((flag) => flag.jobs > 0).sort((a, b) => b.jobs - a.jobs)
   const contributorGroups = new Map<string, ParishContributor>()
   for (const job of jobs) {
     const key = `${job.parish}\0${job.crew}`
@@ -212,6 +234,7 @@ export function buildCrewReport(rows: Row[], config: BoardConfig): CrewReport {
     weatherCleaned: weatherSummary(cleanedTrim.kept),
     weatherRaw: weatherSummary(rawTrim.kept),
     flags,
+    overlapFlags,
     parishContributors,
     counts: {
       filtered: filtered.length,

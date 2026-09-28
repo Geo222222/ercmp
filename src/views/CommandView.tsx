@@ -423,6 +423,16 @@ export function CommandView({
             </div>
           )}
         </section>
+
+        <section className="panel span-2 quality-panel">
+          <div className="panel-head">
+            <div><p className="kicker">Dispatch sequence</p><h2>Overlapping acknowledgements</h2></div>
+          </div>
+          <p className="quality-callout"><strong>Sequence rule</strong><span>A job is listed when it is acknowledged before the previous acknowledged job reaches Actual Completion.</span></p>
+          {scopedReport.overlapFlags.length === 0 ? <p className="empty">No overlapping acknowledgement sequences detected.</p> : <div className="quality-grid" role="list">
+            {scopedReport.overlapFlags.map((flag) => <FlagCard key={`overlap-${flag.crew}-${flag.month}`} flag={flag} maxJobs={Math.max(...scopedReport.overlapFlags.map((item) => item.jobs), 1)} selected={selectedCrew === flag.crew} onSelect={() => toggleCrew(flag.crew)} />)}
+          </div>}
+        </section>
       </div>
     </div>
   )
