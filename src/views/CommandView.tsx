@@ -23,6 +23,7 @@ type Props = {
   /** Per-active-month reports for side-by-side comparison (1 = single-month mode). */
   monthSnapshots?: MonthSnapshot[]
   periodLabel?: string
+  assignedJobsByCrew?: Record<string, number>
 }
 
 type Severity = 'critical' | 'high' | 'watch'
@@ -49,6 +50,7 @@ export function CommandView({
   onSelectCrew,
   monthSnapshots = [],
   periodLabel = 'Current working set',
+  assignedJobsByCrew = {},
 }: Props) {
   const [chartMode, setChartMode] = useState<ChartMode>('stages')
   const [showTable, setShowTable] = useState(false)
@@ -185,7 +187,7 @@ export function CommandView({
         <Kpi
           label="Fastest"
           value={fastest ? formatDuration(fastest.avg) : '—'}
-          note={fastest ? `${fastest.crew} · ${formatInt(fastest.jobs)} jobs` : 'No crew in view'}
+          note={fastest ? `${fastest.crew} · ${formatInt(fastest.jobs)} included · ${formatInt(assignedJobsByCrew[fastest.crew] ?? fastest.jobs)} assigned` : 'No crew in view'}
           tone="good"
           onClick={fastest ? () => toggleCrew(fastest.crew) : undefined}
           active={fastest != null && selectedCrew === fastest.crew}
@@ -193,7 +195,7 @@ export function CommandView({
         <Kpi
           label="Slowest"
           value={rows.length > 1 && slowest ? formatDuration(slowest.avg) : '—'}
-          note={rows.length > 1 && slowest ? `${slowest.crew} · ${formatInt(slowest.jobs)} jobs` : 'Needs at least two crews'}
+          note={rows.length > 1 && slowest ? `${slowest.crew} · ${formatInt(slowest.jobs)} included · ${formatInt(assignedJobsByCrew[slowest.crew] ?? slowest.jobs)} assigned` : 'Needs at least two crews'}
           tone="bad"
           onClick={rows.length > 1 && slowest ? () => toggleCrew(slowest.crew) : undefined}
           active={slowest != null && selectedCrew === slowest.crew}
@@ -247,8 +249,9 @@ export function CommandView({
                   index={index}
                   count={rows.length}
                   maxAvg={maxAvg}
-                  stageLabels={scopedReport.stageLabels}
-                  selected={selectedCrew === row.crew}
+                stageLabels={scopedReport.stageLabels}
+                assignedJobsByCrew={assignedJobsByCrew}
+                selected={selectedCrew === row.crew}
                   onSelect={() => toggleCrew(row.crew)}
                   rankFast={palette.rankFast}
                   rankSlow={palette.rankSlow}
@@ -833,6 +836,7 @@ function CrewRow({
   count,
   maxAvg,
   stageLabels,
+  assignedJobsByCrew,
   selected,
   onSelect,
   rankFast,
@@ -843,6 +847,7 @@ function CrewRow({
   count: number
   maxAvg: number
   stageLabels: string[]
+  assignedJobsByCrew: Record<string, number>
   selected: boolean
   onSelect: () => void
   rankFast: string
@@ -863,8 +868,8 @@ function CrewRow({
             />
           </span>
           <small>
-            avg {formatDuration(row.avg)} · med {formatDuration(row.median)} · {formatInt(row.jobs)}{' '}
-            {row.jobs === 1 ? 'job' : 'jobs'}
+            avg {formatDuration(row.avg)} · med {formatDuration(row.median)} · {formatInt(row.jobs)} included ·{' '}
+            {formatInt(assignedJobsByCrew[row.crew] ?? row.jobs)} assigned
           </small>
           {(thin || skewed) && (
             <span className="crew-tags">

@@ -165,6 +165,11 @@ export function App() {
     return buildCrewReport(combinedRows, config)
   }, [combinedRows, config])
 
+  const assignedJobsByCrew = useMemo(() => {
+    if (!config?.crewCol) return {}
+    return Object.fromEntries(valueCounts(combinedRows, config.crewCol).map(({ value, count }) => [value, count]))
+  }, [combinedRows, config?.crewCol])
+
   const monthSnapshots: MonthSnapshot[] = useMemo(() => {
     if (!config) return []
     return activeTables.map(({ month, table }) => {
@@ -381,6 +386,7 @@ export function App() {
               selectedCrew={selectedCrew}
               onSelectCrew={setSelectedCrew}
               monthSnapshots={monthSnapshots}
+              assignedJobsByCrew={assignedJobsByCrew}
               periodLabel={activeLabel}
             />
           )}
