@@ -124,6 +124,7 @@ export type CrewReport = {
   weatherCleaned: WeatherRow[]
   weatherRaw: WeatherRow[]
   flags: FlagRow[]
+  overlapFlags: FlagRow[]
   parishContributors: ParishContributor[]
   counts: CrewCounts
   error: string | null

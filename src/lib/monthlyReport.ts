@@ -26,6 +26,7 @@ export function monthlyReportHtml(
   const fastest = rows[0]
   const slowest = rows.at(-1)
   const highFlags = [...report.flags].sort((a, b) => b.jobs - a.jobs).slice(0, 10)
+  const overlapFlags = [...report.overlapFlags].sort((a, b) => b.jobs - a.jobs).slice(0, 10)
   const flags = highFlags.length
     ? highFlags.map((flag) => `<tr><td>${escapeHtml(flag.crew)}</td><td>${escapeHtml(flag.month)}</td><td>${formatInt(flag.jobs)}</td></tr>`).join('')
     : '<tr><td colspan="3">No repeated backward-clock flags in this working set.</td></tr>'
@@ -51,6 +52,7 @@ body{font-family:Arial,sans-serif;color:#17221d;max-width:960px;margin:40px auto
 <h2>Total response time</h2><table><thead><tr><th>Rank</th><th>Crew</th><th>Jobs</th><th>Average</th><th>Median</th></tr></thead><tbody>${crewRows(rows)}</tbody></table>
 <h2>Parish contributors</h2><p>The three crews with the largest combined response minutes are shown for each parish. This identifies the main contributors to parish workload and response-time totals.</p>${contributors}
 <h2>Data quality and timestamp coaching</h2><p>${coaching}</p><table><thead><tr><th>Crew</th><th>Month</th><th>Backward-clock jobs</th></tr></thead><tbody>${flags}</tbody></table><p class="note">These flags identify timestamp patterns for review. They should support a coaching conversation and job-level verification, not serve as a standalone performance judgment.</p>
+<h2>Dispatch sequence review</h2><p>These records were acknowledged before the previous acknowledged job reached Actual Completion and should be reviewed as possible queue or timestamp issues.</p><table><thead><tr><th>Crew</th><th>Month</th><th>Overlapping acknowledgements</th></tr></thead><tbody>${overlapFlags.length ? overlapFlags.map((flag) => `<tr><td>${escapeHtml(flag.crew)}</td><td>${escapeHtml(flag.month)}</td><td>${formatInt(flag.jobs)}</td></tr>`).join('') : '<tr><td colspan="3">No overlapping acknowledgement sequences detected.</td></tr>'}</tbody></table>
 <h2>Recommended discussion</h2><ol><li>Review the slowest crews’ stage averages and identify which timestamp interval contributes most to total time.</li><li>Walk through the timestamp sequence: ${report.stageLabels.join(' → ')}.</li><li>Compare a small sample of flagged and slow jobs with dispatch records to separate data-entry issues from real field delays.</li><li>Agree on a follow-up month and recheck both response time and timestamp completeness.</li></ol>
 </body></html>`
   return html
