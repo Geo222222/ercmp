@@ -162,7 +162,7 @@ export function App() {
 
   const report = useMemo(() => {
     if (!config) return null
-    return buildCrewReport(combinedRows, config)
+    return buildComparisonReport(combinedRows, config)
   }, [combinedRows, config])
 
   const assignedJobsByCrew = useMemo(() => {
@@ -176,7 +176,7 @@ export function App() {
       const global = filterRows(table.rows, config.globalFilterCol, config.globalFilterVals)
       const working = filterRows(global, config.extraFilterCol, config.extraFilterVals)
       const assignedJobsByTeam = countTeamJobs(table.rows, config.crewCol)
-      const snapshotReport = buildCrewReport(working, config)
+      const snapshotReport = buildComparisonReport(working, config)
       return {
         id: month.id,
         label: month.label,
@@ -489,6 +489,12 @@ function countTeamJobs(rows: Row[], crewColumn: string): TeamJobCounts {
     if (crew) counts[crewTeam(crew)] += 1
   })
   return counts
+}
+
+function buildComparisonReport(rows: Row[], config: BoardConfig) {
+  const comparison = buildCrewReport(rows, config)
+  const quality = buildCrewReport(rows, { ...config, crewNames: [], minJobs: 1 })
+  return { ...comparison, flags: quality.flags }
 }
 
 function countTeamSummaryJobs(rows: CrewSummaryRow[]): TeamJobCounts {
