@@ -1631,6 +1631,19 @@ input[type="search"], input[type="number"], select {
 
 .month-team-load-grid strong { font-size: 1.15rem; }
 
+.pareto-chart { width: 100%; padding: var(--space-4); }
+.pareto-head { display: flex; justify-content: space-between; color: var(--muted); font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.08em; }
+.pareto-plot { position: relative; margin-top: var(--space-3); }
+.pareto-target { position: absolute; top: 20%; bottom: 0; left: 80%; border-left: 1px dashed var(--warn); z-index: 0; pointer-events: none; }
+.pareto-target span { position: absolute; top: -1.4rem; left: 0.3rem; color: var(--warn); font-size: 0.7rem; }
+.pareto-row { position: relative; z-index: 1; display: grid; grid-template-columns: 2rem minmax(7rem, 1.2fr) minmax(5rem, 3fr) 3rem 3rem; align-items: center; gap: 0.55rem; width: 100%; min-height: 2.2rem; padding: 0.25rem 0.35rem; border: 0; border-bottom: 1px solid var(--line); background: transparent; color: var(--text); text-align: left; cursor: pointer; }
+.pareto-row:hover, .pareto-row.on { background: var(--panel-strong); }
+.pareto-rank, .pareto-row small { color: var(--muted); font-size: 0.72rem; }
+.pareto-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pareto-bar { height: 0.55rem; overflow: hidden; background: var(--track); }
+.pareto-bar i { display: block; height: 100%; background: var(--accent); }
+.pareto-row strong, .pareto-row small { text-align: right; }
+
 .dock {
   position: fixed;
   left: 0;
