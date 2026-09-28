@@ -14,8 +14,8 @@ function assert(condition: boolean, message: string): void {
   console.log('ok', message)
 }
 
-const workbookPath = fileURLToPath(new URL('../JUNE - KSA.xlsx', import.meta.url))
-const dataset = parseWorkbook(readFileSync(workbookPath), 'JUNE - KSA.xlsx')
+const workbookPath = fileURLToPath(new URL('../data/JULY - KSA.xlsx', import.meta.url))
+const dataset = parseWorkbook(readFileSync(workbookPath), 'JULY - KSA.xlsx')
 const sheet = dataset.sheets[0]
 const headerRow = guessHeaderRow(sheet.cells)
 const table = tableFromGrid(sheet, headerRow)

@@ -55,7 +55,7 @@ export type DataTable = {
   headerRow: number
 }
 
-export type ChartType = 'bar' | 'speed' | 'hist' | 'box' | 'scatter' | 'corr'
+export type ChartType = 'bar' | 'pareto' | 'speed' | 'hist' | 'box' | 'scatter' | 'corr'
 
 export type CleaningMode = 'cleaned' | 'raw'
 

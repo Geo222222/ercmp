@@ -37,6 +37,13 @@ const TYPES: { id: ChartType; label: string; signal: string; tip: HelpKey; blurb
     blurb: 'Who owns the volume — parish, crew, weather, and the long tail.',
   },
   {
+    id: 'pareto',
+    label: 'Pareto',
+    signal: '80% concentration',
+    tip: 'chartsShare',
+    blurb: 'See which parishes or crews account for most of the workload, then where the long tail begins.',
+  },
+  {
     id: 'hist',
     label: 'Density',
     signal: 'Signal silhouette',
@@ -544,6 +551,19 @@ function renderChart(args: RenderArgs): { node: ReactNode; svg: boolean; note?: 
     }
   }
 
+  if (config.chartType === 'pareto') {
+    const model = barCounts(rows, config.chartCol, { excludeMissing })
+    if (!model) {
+      return { svg: false, node: <EmptyInstrument title="No values to rank" body="That category is empty after filters." /> }
+    }
+    return {
+      svg: false,
+      node: <ParetoChart model={model} selected={selected} onSelect={onSelect} />,
+      focus: barFocus(model, rows, headers, selected),
+      note: 'Pareto concentration — bars show job share and the line shows cumulative share. The marker is 80%.',
+    }
+  }
+
   if ((config.chartType === 'hist' || config.chartType === 'box' || config.chartType === 'scatter') && numeric.length === 0) {
     return {
       svg: false,
@@ -649,6 +669,48 @@ function renderChart(args: RenderArgs): { node: ReactNode; svg: boolean; note?: 
         ? `Unassigned shown as its own rail (${formatInt(model.missing)}). Toggle Exclude Unassigned to hide.`
         : 'Arc for leaders · full ranking below · tap to lock.',
   }
+}
+
+function ParetoChart({
+  model,
+  selected,
+  onSelect,
+}: {
+  model: BarModel
+  selected: string | null
+  onSelect: (label: string) => void
+}) {
+  let cumulative = 0
+  return (
+    <div className="pareto-chart" aria-label={`Pareto chart for ${model.column}`}>
+      <div className="pareto-head">
+        <span>{model.column}</span>
+        <span>{formatInt(model.total)} jobs</span>
+      </div>
+      <div className="pareto-plot">
+        <div className="pareto-target" aria-label="80 percent cumulative share"><span>80%</span></div>
+        {model.items.map((item, index) => {
+          const share = model.total ? item.n / model.total : 0
+          cumulative += share
+          return (
+            <button
+              key={item.label}
+              type="button"
+              className={selected === item.label ? 'pareto-row on' : 'pareto-row'}
+              onClick={() => onSelect(item.label)}
+              title={`${categoryLabel(item.label)}: ${formatInt(item.n)} jobs, ${(share * 100).toFixed(1)}% share, ${(cumulative * 100).toFixed(1)}% cumulative`}
+            >
+              <span className="pareto-rank">{String(index + 1).padStart(2, '0')}</span>
+              <span className="pareto-label">{categoryLabel(item.label)}</span>
+              <span className="pareto-bar"><i style={{ width: `${share * 100}%` }} /></span>
+              <strong>{formatInt(item.n)}</strong>
+              <small>{(cumulative * 100).toFixed(0)}%</small>
+            </button>
+          )
+        })}
+      </div>
+    </div>
+  )
 }
 
 function barFocus(model: BarModel, rows: Row[], headers: string[], selected: string | null): FocusState | undefined {
