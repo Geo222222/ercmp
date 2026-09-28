@@ -4,6 +4,7 @@ import { roundTo } from './format'
 import { asText } from './rows'
 
 const NEGATIVE_THRESHOLD_MIN = -15
+const COMPLETION_GAP_LIMIT_MIN = 15
 const MIN_ENROUTE_COMPLETION_MIN = 5
 const OUTLIER_QUANTILE = 0.99
 
@@ -144,7 +145,13 @@ export function buildCrewReport(rows: Row[], config: BoardConfig): CrewReport {
     const stamped = times as Date[]
     const stages = stamped.slice(0, -1).map((time, index) => minutesBetween(stamped[index + 1], time))
     const total = minutesBetween(stamped[stamped.length - 1], stamped[0])
-    const negative = stages.some((minutes) => minutes < NEGATIVE_THRESHOLD_MIN) || total < NEGATIVE_THRESHOLD_MIN
+    const actualColumn = Object.keys(row).find((column) => /actual\s*comp/i.test(column))
+    const finalColumn = Object.keys(row).find((column) => /final\s*comp/i.test(column))
+    const actual = actualColumn ? parseFlexibleDatetime(row[actualColumn]) : null
+    const final = finalColumn ? parseFlexibleDatetime(row[finalColumn]) : null
+    const completionGap = actual && final ? Math.abs(minutesBetween(final, actual)) : null
+    const completionGapNegative = completionGap != null && completionGap > COMPLETION_GAP_LIMIT_MIN
+    const negative = stages.some((minutes) => minutes < NEGATIVE_THRESHOLD_MIN) || total < NEGATIVE_THRESHOLD_MIN || completionGapNegative
     const weather = config.weatherCol !== 'none' ? asText(row[config.weatherCol]) : null
     jobs.push({
       crew: asText(row[config.crewCol]) ?? 'Unknown',
