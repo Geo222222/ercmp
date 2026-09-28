@@ -1607,6 +1607,30 @@ input[type="search"], input[type="number"], select {
 
 .drawer-body { overflow: auto; padding-bottom: 40px; }
 
+.month-team-load {
+  margin-top: var(--space-3);
+  padding-top: var(--space-3);
+  border-top: 1px solid var(--line);
+}
+
+.month-team-load .kicker { margin-bottom: var(--space-2); }
+
+.month-team-load-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-2);
+}
+
+.month-team-load-grid > div {
+  display: grid;
+  gap: 2px;
+}
+
+.month-team-load-grid span,
+.month-team-load-grid small { color: var(--muted); }
+
+.month-team-load-grid strong { font-size: 1.15rem; }
+
 .dock {
   position: fixed;
   left: 0;

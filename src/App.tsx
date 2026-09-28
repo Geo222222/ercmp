@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import type { BoardConfig, CleaningMode, MonthDataset, MonthSnapshot, Row, ViewId } from './types'
+import type { BoardConfig, CleaningMode, CrewSummaryRow, MonthDataset, MonthSnapshot, Row, TeamJobCounts, ViewId } from './types'
 import {
   createMonthDataset,
   fetchDiscoveredWorkbooks,
@@ -11,7 +11,7 @@ import {
   sortMonthDatasets,
 } from './lib/excel'
 import { defaultConfig, readDefaultParishes, writeDefaultParishes } from './lib/defaults'
-import { filterRows, valueCounts } from './lib/rows'
+import { asText, filterRows, valueCounts } from './lib/rows'
 import { buildCrewReport } from './lib/crew'
 import { formatInt } from './lib/format'
 import { applyTheme, readTheme, type ThemeId } from './lib/theme'
@@ -27,6 +27,7 @@ import { ScopeBar } from './components/ScopeBar'
 import { ThemeOrb } from './components/ThemeOrb'
 import { ErcmpLogo } from './components/ErcmpLogo'
 import { parishColumn } from './lib/parishGeo'
+import { crewTeam } from './lib/crewTeams'
 import './styles/months.css'
 
 type View = ViewId
@@ -169,13 +170,17 @@ export function App() {
     return activeTables.map(({ month, table }) => {
       const global = filterRows(table.rows, config.globalFilterCol, config.globalFilterVals)
       const working = filterRows(global, config.extraFilterCol, config.extraFilterVals)
+      const assignedJobsByTeam = countTeamJobs(table.rows, config.crewCol)
+      const snapshotReport = buildCrewReport(working, config)
       return {
         id: month.id,
         label: month.label,
         fileName: month.fileName,
         range: month.range,
         rowCount: working.length,
-        report: buildCrewReport(working, config),
+        report: snapshotReport,
+        assignedJobsByTeam,
+        includedJobsByTeam: countTeamSummaryJobs(snapshotReport.cleaned, config),
       }
     })
   }, [activeTables, config])
@@ -469,6 +474,23 @@ export function App() {
       </div>
     </MonthProvider>
   )
+}
+
+function countTeamJobs(rows: Row[], crewColumn: string): TeamJobCounts {
+  const counts: TeamJobCounts = { 'in-house': 0, contractor: 0 }
+  rows.forEach((row) => {
+    const crew = asText(row[crewColumn])
+    if (crew) counts[crewTeam(crew)] += 1
+  })
+  return counts
+}
+
+function countTeamSummaryJobs(rows: CrewSummaryRow[]): TeamJobCounts {
+  const counts: TeamJobCounts = { 'in-house': 0, contractor: 0 }
+  rows.forEach((row) => {
+    counts[crewTeam(row.crew)] += row.jobs
+  })
+  return counts
 }
 
 function DockButton({ id, label, view, onView }: { id: View; label: string; view: View; onView: (view: View) => void }) {

@@ -40,6 +40,13 @@ export type MonthSnapshot = {
   range: MonthRange
   rowCount: number
   report: CrewReport
+  assignedJobsByTeam: TeamJobCounts
+  includedJobsByTeam: TeamJobCounts
+}
+
+export type TeamJobCounts = {
+  'in-house': number
+  contractor: number
 }
 
 export type DataTable = {
