@@ -403,7 +403,7 @@ export function CommandView({
               Flag rule <Hint tip="negativeRule" label="About the −15 minute rule" />
             </strong>
             <span>
-              Stage or total runs &gt;15 min backward · listed when a crew has &gt;2 of those jobs in one month
+              Stage or total runs &gt;15 min backward, or Actual Comp. Time and Final Comp. Time differ by &gt;15 min · listed when a crew has &gt;2 of those jobs in one month
             </span>
           </p>
 
